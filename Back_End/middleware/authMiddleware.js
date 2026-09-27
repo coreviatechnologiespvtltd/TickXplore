@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Vendor = require("../models/Vendor");
 const Admin = require("../models/Admin");
+const Hotel = require("../models/Hotel");
 
 const protect = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -17,7 +18,8 @@ const protect = async (req, res, next) => {
     const user =
       (await User.findById(decoded._id)) ||
       (await Vendor.findById(decoded._id)) ||
-      (await Admin.findById(decoded._id));
+      (await Admin.findById(decoded._id)) ||
+      (await Hotel.findById(decoded._id));
 
 
     if (!user) {

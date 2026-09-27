@@ -2,6 +2,7 @@ const firebaseAuth = require("../config/firebase");
 const UserModel = require("../models/User");
 const VendorModel = require("../models/Vendor");
 const AdminModel = require("../models/Admin");
+const HotelModel = require("../models/Hotel");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
 
 exports.googleSignIn = async (req, res) => {
@@ -33,9 +34,11 @@ exports.googleSignIn = async (req, res) => {
       (await UserModel.findOne({ googleId })) ||
       (await VendorModel.findOne({ googleId })) ||
       (await AdminModel.findOne({ googleId })) ||
+      (await HotelModel.findOne({ googleId })) ||
       (await UserModel.findOne({ email })) ||
       (await VendorModel.findOne({ email })) ||
-      (await AdminModel.findOne({ email }));
+      (await AdminModel.findOne({ email })) ||
+      (await HotelModel.findOne({ email }));
 
     if (!user) {
       user = await UserModel.create({
@@ -65,6 +68,12 @@ exports.googleSignIn = async (req, res) => {
         .json({ message: "Your vendor account is not active yet. Please wait for admin approval." });
     }
 
+    if (user.role === "hotel" && !user.isActive) {
+      return res
+        .status(403)
+        .json({ message: "Your hotel account is not active yet. Please wait for admin approval." });
+    }
+
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
@@ -82,10 +91,12 @@ exports.googleSignIn = async (req, res) => {
         _id: user._id,
         email: user.email,
         role: user.role,
-        name: user.name || user.vendorName || "",
+        name: user.name || user.vendorName || user.hotelName || "",
         vendorName: user.vendorName || "",
+        hotelName: user.hotelName || "",
         profilePhoto: user.profilePhoto || (picture || ""),
         isActive: user.isActive ?? true,
+        listingStatus: user.listingStatus || null,
       },
     });
   } catch (error) {

@@ -32,6 +32,9 @@ const VendorDashboard = lazy(() => import("../Pages/Vendor_Dashboard/VendorDashb
 const AccommodationPage = lazy(() => import("../Pages/AccommodationPage"));
 const AccommodationDetails = lazy(() => import("../Pages/AccommodationDetails"));
 
+// Lazy-loaded hotel sign-up — sizeable form with the amenity catalog picker
+const HotelRegistration = lazy(() => import("../Pages/HotelRegistration"));
+
 /* Lazy admin / vendor sub-routes (must be declared before `router` uses them) */
 const DashboardChildren = {
   Home: lazy(() => import("../Pages/Admin_Dashboard/DashboardHome")),
@@ -48,6 +51,17 @@ const DashboardChildren = {
   VendorBookings: lazy(() => import("../Pages/Vendor_Dashboard/Bookings")),
   VendorBookTicket: lazy(() => import("../Pages/Vendor_Dashboard/BookTicket")),
   AdminBookTicket: lazy(() => import("../Pages/Vendor_Dashboard/BookTicket")),
+};
+
+/* Lazy hotel dashboard shell + its screens (one code-split chunk each) */
+const HotelDashboardShell = lazy(() => import("../Pages/Hotel_Dashboard/HotelDashboard"));
+const HotelDashboardChildren = {
+  Overview: lazy(() => import("../Pages/Hotel_Dashboard/DashboardOverview")),
+  Listing: lazy(() => import("../Pages/Hotel_Dashboard/HotelListing")),
+  Profile: lazy(() => import("../Pages/Hotel_Dashboard/HotelProfile")),
+  Rooms: lazy(() => import("../Pages/Hotel_Dashboard/HotelRooms")),
+  Availability: lazy(() => import("../Pages/Hotel_Dashboard/HotelAvailability")),
+  Policies: lazy(() => import("../Pages/Hotel_Dashboard/HotelPolicies")),
 };
 
 const PageFallback = () => (
@@ -73,6 +87,14 @@ const router = createBrowserRouter([
       { path: "/blogs/:slug", element: <TouristBlog /> },
       { path: "/sign-in", element: <Login /> },
       { path: "/signup", element: <Registration /> },
+      {
+        path: "/hotelregistration",
+        element: (
+          <Suspense fallback={<PageFallback />}>
+            <HotelRegistration />
+          </Suspense>
+        ),
+      },
       { path: "/vehicle-bookings", element: <Vehicle_Booking /> },
       { path: "/faqs", element: <FAQs /> },
       { path: "/profile", element: <Profile /> },
@@ -170,6 +192,24 @@ const router = createBrowserRouter([
       { path: "buses", element: <DashboardChildren.VendorBuses /> },
       { path: "bookings", element: <DashboardChildren.VendorBookings /> },
       { path: "book-ticket", element: <DashboardChildren.VendorBookTicket /> },
+    ],
+  },
+  {
+    path: "/hoteldashboard",
+    element: (
+      <ProtectedRoute allowedRoles={["hotel"]}>
+        <Suspense fallback={<PageFallback />}>
+          <HotelDashboardShell />
+        </Suspense>
+      </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <HotelDashboardChildren.Overview /> },
+      { path: "listing", element: <HotelDashboardChildren.Listing /> },
+      { path: "profile", element: <HotelDashboardChildren.Profile /> },
+      { path: "rooms", element: <HotelDashboardChildren.Rooms /> },
+      { path: "availability", element: <HotelDashboardChildren.Availability /> },
+      { path: "policies", element: <HotelDashboardChildren.Policies /> },
     ],
   },
 ]);
