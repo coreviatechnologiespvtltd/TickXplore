@@ -110,9 +110,9 @@ const TransportCard = ({ data, onSelect, type }: TransportCardProps) => {
         </div>
         <button
           onClick={onSelect}
-          className="shrink-0 rounded-xl bg-emerald-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-700"
+          className="shrink-0 rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-blue-900"
         >
-          {type === "bus" ? "View Seats & Book" : "Book Vehicle"}
+          {type === "bus" ? "View Seats" : "Book Vehicle"}
         </button>
       </div>
     </div>

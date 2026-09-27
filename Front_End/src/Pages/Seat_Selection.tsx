@@ -279,7 +279,7 @@ const SeatAvailability = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-28 lg:pb-8">
       {/* Journey header band */}
-      <header className="bg-gradient-to-br from-teal-500 via-teal-600 to-slate-900 px-4 py-6 text-white sm:px-6 md:py-8">
+      <header className="bg-gradient-to-br from-blue-500 via-blue-600 to-slate-700 px-4 py-6 text-white sm:px-6 md:py-8">
         <div className="mx-auto max-w-6xl">
           <Link
             to="/tickets"
@@ -389,8 +389,8 @@ const SeatAvailability = () => {
                   onClick={() => setPaymentMethod(option.value)}
                   className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                     paymentMethod === option.value
-                      ? "bg-teal-600 text-white shadow"
-                      : "text-slate-600 hover:bg-white"
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-black-600 hover:bg-white"
                   }`}
                 >
                   {option.icon}
@@ -440,7 +440,7 @@ const SeatAvailability = () => {
             <button
               onClick={handleProceedToPayment}
               disabled={isProcessing}
-              className="mt-4 hidden w-full rounded-xl bg-teal-600 py-3 text-base font-semibold text-white transition-colors hover:bg-teal-700 disabled:opacity-60 lg:block"
+              className="mt-4 hidden w-full rounded-xl bg-blue-600 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-900 disabled:opacity-60 lg:block"
             >
               Continue to Payment
               {selectedSeats.length > 0 && ` (${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""})`}

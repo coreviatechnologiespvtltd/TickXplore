@@ -5,6 +5,25 @@ const Bus = require("../models/Bus");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { sendEmail } = require("../utils/sendEmail");
+const { parseTakeoffInput, formatTakeoffDate, formatTakeoffTime } = require("../utils/datetime");
+
+/**
+ * A `datetime-local` form can never emit a `Z`, so a zoned value here always
+ * comes from a non-form caller. It is honoured as a genuine instant — that is
+ * the correct reading — but entering "2026-09-30T18:30" as a wall-clock and
+ * sending it with a `Z` shifts the departure by the Nepal offset and, near
+ * midnight, into the next calendar day. Surface it so that mistake is traceable.
+ */
+const warnOnZonedTakeoff = (value) => {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text || !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) return;
+  const parsed = parseTakeoffInput(text);
+  console.warn(
+    `[busController] takeOffDate "${text}" carries a UTC offset and is treated as the instant ` +
+      `${parsed.toISOString()} (${formatTakeoffDate(parsed)} ${formatTakeoffTime(parsed)} Nepal). ` +
+      "Send a zone-less local value like \"2026-09-30T18:30\" to mean wall-clock time."
+  );
+};
 
 // Helper function to validate required fields
 const validateRequiredFields = (fields, res) => {
@@ -67,6 +86,17 @@ exports.createBus = async (req, res) => {
     );
     if (validationError) return validationError;
 
+    // A vendor typing "07:30" means 07:30 in the app timezone, not in whatever
+    // zone the API server happens to run in. Normalise before it reaches Mongo.
+    warnOnZonedTakeoff(takeOffDate);
+    const takeOffDateValue = parseTakeoffInput(takeOffDate);
+    if (!takeOffDateValue) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid takeOffDate value",
+      });
+    }
+
     // Ensure pricePerSeat is a number
     const pricePerSeatNumber = Number(pricePerSeat);
     if (isNaN(pricePerSeatNumber)) {
@@ -107,7 +137,7 @@ exports.createBus = async (req, res) => {
       pickupPoint,
       dropPoint,
       totalSeats,
-      takeOffDate,
+      takeOffDate: takeOffDateValue,
       bookedSeats,
     });
 
@@ -280,6 +310,20 @@ exports.updateBus = async (req, res) => {
       const imagePath = handleFileUpload(req.files.image, res);
       if (imagePath === null) return; // Stop execution if upload failed
       bus.image = imagePath;
+    }
+
+    // Re-normalise the take-off time so an edited value is still read as
+    // app-timezone wall-clock time rather than the server's zone.
+    if (req.body.takeOffDate !== undefined) {
+      warnOnZonedTakeoff(req.body.takeOffDate);
+      const takeOffDateValue = parseTakeoffInput(req.body.takeOffDate);
+      if (!takeOffDateValue) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid takeOffDate value",
+        });
+      }
+      bus.takeOffDate = takeOffDateValue;
     }
 
     await bus.save();

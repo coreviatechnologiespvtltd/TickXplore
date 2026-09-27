@@ -7,7 +7,11 @@ const BookingSchema = new mongoose.Schema(
     customerName: { type: String, trim: true },
     customerPhone: { type: String, trim: true },
     customerEmail: { type: String, trim: true },
-    /* Human-friendly ticket reference, e.g. "Mountain Express-2B" */
+    /* Ticket reference shown to the customer, "<YEAR><4-digit sequence>",
+       e.g. "20260001". Generated once by utils/bookingNumber.js and never
+       changed afterwards; numbers issued before the width changed keep their
+       5-digit form. `sparse` keeps pre-migration rows without a number
+       from colliding on the unique index. */
     bookingNumber: { type: String, trim: true },
     /* Email + PDF ticket delivery tracking */
     emailStatus: {
@@ -67,5 +71,11 @@ const BookingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+/* The database-level guarantee that two bookings can never share a ticket
+   number, even if the application layer is bypassed. */
+BookingSchema.index({ bookingNumber: 1 }, { unique: true, sparse: true });
+BookingSchema.index({ takeOffDate: 1 });
+BookingSchema.index({ reservationDate: 1 });
 
 module.exports = mongoose.model("Booking", BookingSchema);

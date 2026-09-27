@@ -9,6 +9,8 @@ const Reservation = require("../models/Reservation");
 const Vendor = require("../models/Vendor");
 const { sendEmail } = require("../utils/sendEmail");
 const ticketService = require("../utils/ticketService");
+const { allocateBookingNumber } = require("../utils/bookingNumber");
+const { parseTakeoffInput, endOfTakeoffDay } = require("../utils/datetime");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
 const Admin = require("../models/Admin");
@@ -59,10 +61,46 @@ async function safeRun(label, fn) {
   }
 }
 
+/**
+ * Build the trip-related part of a booking document.
+ *
+ * Every booking path (online initiate, Cash on Visit, legacy recovery) funnels
+ * through here so the stored pickup point, dropping point and take-off
+ * date/time always originate from the database:
+ *
+ *  - Bus: the Bus document *is* the trip/schedule, so `bus.pickupPoint`,
+ *    `bus.dropPoint` and `bus.takeOffDate` are authoritative. Anything the
+ *    client sends is ignored — a stale or tampered value can never reach a
+ *    ticket.
+ *  - Vehicle: there is no fixed schedule, so the reservation date and route
+ *    come from the request, falling back to the vehicle's own route.
+ *
+ * No field is ever defaulted to the current time.
+ */
+function buildTripFields({ type, bus, vehicle, itemId, seats, takeOffDate, pickupPoint, dropPoint }) {
+  if (type === "bus") {
+    if (!bus) throw new Error("Bus not found");
+    return {
+      busId: bus._id,
+      selectedSeats: (seats || []).map(Number),
+      pickupPoint: bus.pickupPoint,
+      dropPoint: bus.dropPoint,
+      takeOffDate: bus.takeOffDate,
+    };
+  }
+
+  if (!vehicle) throw new Error("Vehicle not found");
+  const reservationDate = parseTakeoffInput(takeOffDate);
+  return {
+    vehicleId: vehicle._id,
+    reservationDate: reservationDate || undefined,
+    pickupPoint: String(pickupPoint || "").trim() || vehicle.pickupPoint || "N/A",
+    dropPoint: String(dropPoint || "").trim() || vehicle.dropPoint || "N/A",
+  };
+}
+
 function endOfReservationDay(date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
+  return endOfTakeoffDay(date);
 }
 
 // Returns the subset of `seats` that are already taken on `busId`. A seat is
@@ -213,7 +251,7 @@ async function completeBooking(booking, pidx) {
           await sendEmail(
             vendor.email,
             "New Bus Booking - TickXplore",
-            `<p>Booking ID: ${booking._id}</p><p>Total: Rs. ${totalPrice}</p>`
+            `<p>Booking Number: ${booking.bookingNumber}</p><p>Total: Rs. ${totalPrice}</p>`
           );
         }
       });
@@ -286,7 +324,7 @@ async function completeBooking(booking, pidx) {
           await sendEmail(
             vendor.email,
             "New Vehicle Booking - TickXplore",
-            `<p>Booking ID: ${booking._id}</p><p>Total: Rs. ${totalPrice}</p>`
+            `<p>Booking Number: ${booking.bookingNumber}</p><p>Total: Rs. ${totalPrice}</p>`
           );
         }
       });
@@ -310,7 +348,7 @@ async function completeBooking(booking, pidx) {
         await sendEmail(
           admin.email,
           "New Booking Confirmed - TickXplore",
-          `<p>Booking ID: ${booking._id}</p><p>Commission: Rs. ${commissionAmount}</p>`
+          `<p>Booking Number: ${booking.bookingNumber}</p><p>Commission: Rs. ${commissionAmount}</p>`
         );
       }
     }
@@ -377,17 +415,16 @@ async function createBookingFromLegacyMeta(paymentData, query, pidx) {
 
     booking = await Booking.create({
       userId,
-      busId: itemId,
-      selectedSeats: seats,
       totalPrice,
       status: "Pending",
       paymentStatus: "Paid",
       transactionId: pidx,
       purchaseOrderId: query.purchase_order_id,
-      takeOffDate: bus.takeOffDate || bus.tripDate || new Date(takeOffDate),
       commissionAmount,
       vendorEarnings,
       settlementDone: false,
+      bookingNumber: await allocateBookingNumber(new Date()),
+      ...buildTripFields({ type, bus, itemId, seats, takeOffDate, pickupPoint, dropPoint }),
     });
   } else if (type === "vehicle") {
     const vehicle = await Vehicle.findById(itemId);
@@ -399,18 +436,26 @@ async function createBookingFromLegacyMeta(paymentData, query, pidx) {
 
     booking = await Booking.create({
       userId,
-      vehicleId: itemId,
       totalPrice,
       status: "Pending",
       paymentStatus: "Paid",
       transactionId: pidx,
       purchaseOrderId: query.purchase_order_id,
-      reservationDate: takeOffDate ? new Date(takeOffDate) : new Date(),
-      pickupPoint: pickupPoint || "N/A",
-      dropPoint: dropPoint || "N/A",
       commissionAmount,
       vendorEarnings,
       settlementDone: false,
+      bookingNumber: await allocateBookingNumber(new Date()),
+      ...buildTripFields({
+        type,
+        vehicle,
+        itemId,
+        seats,
+        // Legacy metadata is untrusted; parse it as an app-timezone date and
+        // never fall back to "now" — that would invent a departure time.
+        takeOffDate,
+        pickupPoint,
+        dropPoint,
+      }),
     });
   } else {
     return null;
@@ -523,12 +568,9 @@ router.post("/initiate", async (req, res) => {
     const commissionAmount = Math.round((commissionRate / 100) * totalPrice * 100) / 100;
     const vendorEarnings = Math.round((totalPrice - commissionAmount) * 100) / 100;
 
-    // Human-friendly ticket reference, e.g. "Mountain Express-2B".
-    const bookingNumber = ticketService.bookingNumberFor(
-      type === "bus"
-        ? { busId: { name: bus.name }, selectedSeats: seats }
-        : { vehicleId: { name: vehicle.name }, reservationDate: takeOffDate || new Date() }
-    );
+    // Ticket reference, e.g. "202600001". Allocated from the atomic per-year
+    // counter and assigned once, here, for the life of the booking.
+    const bookingNumber = await allocateBookingNumber(new Date());
 
     // Persist a PENDING booking BEFORE calling Khalti so the charge can never be
     // lost if the callback restarts or fails. `/callback` and `/verify` complete it.
@@ -546,18 +588,8 @@ router.post("/initiate", async (req, res) => {
       commissionAmount,
       vendorEarnings,
       bookingNumber,
+      ...buildTripFields({ type, bus, vehicle, itemId, seats, takeOffDate, pickupPoint, dropPoint }),
     };
-
-    if (type === "bus") {
-      bookingFields.busId = itemId;
-      bookingFields.selectedSeats = seats;
-      bookingFields.takeOffDate = bus.takeOffDate || bus.tripDate || new Date();
-    } else {
-      bookingFields.vehicleId = itemId;
-      bookingFields.reservationDate = takeOffDate ? new Date(takeOffDate) : new Date();
-      bookingFields.pickupPoint = pickupPoint || "N/A";
-      bookingFields.dropPoint = dropPoint || "N/A";
-    }
 
     try {
       booking = await Booking.create(bookingFields);
@@ -603,6 +635,8 @@ router.post("/initiate", async (req, res) => {
     return res.status(200).json({
       payment_url: khaltiRes.data.payment_url,
       pidx: khaltiRes.data.pidx,
+      bookingId: booking._id,
+      bookingNumber: booking.bookingNumber,
     });
 
   } catch (err) {
@@ -801,17 +835,15 @@ router.post("/cash-on-visit", async (req, res) => {
         customerPhone: customer.customerPhone || undefined,
         customerEmail: customer.customerEmail || undefined,
         passengers: Array.isArray(passengers) ? passengers : [],
-        busId: itemId,
-        selectedSeats: seats,
         totalPrice,
         status: "Pending",
         paymentMethod: "CashOnVisit",
         paymentStatus: "CashOnVisit",
         transactionId: `cash-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        takeOffDate: takeOffDate || bus.takeOffDate || bus.tripDate,
         commissionAmount,
         vendorEarnings,
-        bookingNumber: ticketService.bookingNumberFor({ busId: { name: bus.name }, selectedSeats: seats }),
+        bookingNumber: await allocateBookingNumber(new Date()),
+        ...buildTripFields({ type, bus, itemId, seats, takeOffDate, pickupPoint, dropPoint }),
       });
 
       const locked = await tryLockBusSeats(itemId, seats);
@@ -849,29 +881,38 @@ router.post("/cash-on-visit", async (req, res) => {
       const commissionAmount = (commissionRate / 100) * totalPrice;
       const vendorEarnings = totalPrice - commissionAmount;
 
+      const tripFields = buildTripFields({
+        type,
+        vehicle,
+        itemId,
+        takeOffDate,
+        pickupPoint,
+        dropPoint,
+      });
+      if (!tripFields.reservationDate) {
+        return res.status(400).json({ message: "A reservation date is required for vehicle bookings." });
+      }
+
       booking = await Booking.create({
         userId: customer.userId || undefined,
         customerName: customer.customerName || undefined,
         customerPhone: customer.customerPhone || undefined,
         customerEmail: customer.customerEmail || undefined,
         passengers: Array.isArray(passengers) ? passengers : [],
-        vehicleId: itemId,
         totalPrice,
         status: "Pending",
         paymentMethod: "CashOnVisit",
         paymentStatus: "CashOnVisit",
         transactionId: `cash-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        reservationDate: takeOffDate || new Date(),
-        pickupPoint,
-        dropPoint,
         commissionAmount,
         vendorEarnings,
-        bookingNumber: ticketService.bookingNumberFor({ vehicleId: { name: vehicle.name }, reservationDate: takeOffDate || new Date() }),
+        bookingNumber: await allocateBookingNumber(new Date()),
+        ...tripFields,
       });
 
       // Date-scoped reservation (mirrors the online flow) so the vehicle can be
       // re-booked for other dates and conflicts are checked per-date.
-      const reservedFrom = takeOffDate ? new Date(takeOffDate) : new Date();
+      const reservedFrom = tripFields.reservationDate;
       const reservedUntil = endOfReservationDay(reservedFrom);
       await Reservation.create({
         vehicleId: itemId,
@@ -879,8 +920,8 @@ router.post("/cash-on-visit", async (req, res) => {
         customerName: customer.customerName || undefined,
         customerPhone: customer.customerPhone || undefined,
         customerEmail: customer.customerEmail || undefined,
-        pickupPoint: pickupPoint || "N/A",
-        dropPoint: dropPoint || "N/A",
+        pickupPoint: tripFields.pickupPoint,
+        dropPoint: tripFields.dropPoint,
         reservedFrom,
         reservedUntil,
         paymentStatus: "CashOnVisit",
@@ -895,8 +936,8 @@ router.post("/cash-on-visit", async (req, res) => {
             userId: customer.userId || undefined,
             reservedFrom,
             reservedUntil,
-            pickupPoint: pickupPoint || "N/A",
-            dropPoint: dropPoint || "N/A",
+            pickupPoint: tripFields.pickupPoint,
+            dropPoint: tripFields.dropPoint,
           },
         },
         $inc: { totalEarnings: vendorEarnings, totalCommission: commissionAmount },
@@ -952,7 +993,7 @@ router.post("/cash-on-visit", async (req, res) => {
       `
       <p><strong>New Cash on Visit booking received:</strong></p>
       <ul>
-        <li><strong>Booking ID:</strong> ${booking._id}</li>
+        <li><strong>Booking Number:</strong> ${booking.bookingNumber}</li>
         <li><strong>User ID:</strong> ${userId}</li>
         <li><strong>Payment Method:</strong> Cash on Visit</li>
         <li><strong>Status:</strong> Pending</li>
