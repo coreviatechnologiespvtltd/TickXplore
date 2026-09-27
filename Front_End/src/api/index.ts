@@ -12,10 +12,12 @@ import type {
   Vehicle,
   Vendor,
 } from "./types";
+import { ACCOMMODATION_TYPES } from "./hotel";
 
 export { default as api } from "./http";
 export { API_BASE_URL, LOGIN_PATH } from "./http";
 export * from "./types";
+export * from "./hotel";
 
 /* ------------------------------------------------------------------ */
 /* Auth                                                                */
@@ -45,9 +47,56 @@ export const authApi = {
 /* ------------------------------------------------------------------ */
 /* Users / registration                                                */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Body accepted by `POST /auth/register`.
+ *
+ * `vendor*` is required when `role` is `"vendor"`, `hotel*` when it is
+ * `"hotel"`. The hotel listing seed (`type` … `amenities`) is optional and is
+ * only read by the backend for `role: "hotel"`; the rest of the listing is
+ * completed later in the hotel dashboard.
+ */
+export interface RegisterPayload {
+  role: "user" | "vendor" | "hotel";
+  name: string;
+  location: string;
+  email: string;
+  phoneNumber: string;
+  password: string;
+  confirmPassword: string;
+
+  vendorName?: string;
+  vendorLocation?: string;
+
+  hotelName?: string;
+  hotelLocation?: string;
+
+  /* Hotel listing seed — optional */
+  type?: (typeof ACCOMMODATION_TYPES)[number];
+  starRating?: number;
+  description?: string;
+  address?: string;
+  area?: string;
+  city?: string;
+  district?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  amenities?: string[];
+}
+
+export interface RegisterResponse {
+  message: string;
+  user: { _id: string; email: string; role: string };
+}
+
 export const usersApi = {
-  register: (data: Record<string, unknown>) =>
-    api.post("/users/register", data).then((r) => r.data),
+  /**
+   * NOTE: the backend exposes this at `/auth/register`. The old `/users/register`
+   * path matched no route and always 404'd — `userRoutes` declares no `POST`
+   * handler, so the request fell through to the app-wide 404.
+   */
+  register: (data: RegisterPayload) =>
+    api.post("/auth/register", data).then((r) => r.data as RegisterResponse),
 
   verifyOtp: (data: { userId: string; otp: string }) =>
     api.post("/api/verify-otp", data).then((r) => r.data),

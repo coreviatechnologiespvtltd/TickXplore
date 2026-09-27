@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { ExclamationCircleIcon } from "@heroicons/react/24/outline";
-import { usersApi } from "../api";
+import { usersApi, type RegisterPayload } from "../api";
 
 const Registration = () => {
   const [role, setRole] = useState<"user" | "vendor">("user");
@@ -39,7 +39,7 @@ const Registration = () => {
 
     setIsLoading(true);
 
-    const data: Record<string, unknown> = {
+    const data: RegisterPayload = {
       name,
       location,
       email,
@@ -322,6 +322,16 @@ const Registration = () => {
           Already have an account?{" "}
           <button onClick={() => navigate("/sign-in")} className="font-medium text-blue-600 hover:text-blue-500">
             Sign in
+          </button>
+        </div>
+
+        <div className="rounded-lg bg-blue-50 p-3 text-center text-sm text-slate-700">
+          Own a hotel or guest house?{" "}
+          <button
+            onClick={() => navigate("/hotelregistration")}
+            className="font-medium text-blue-600 hover:text-blue-500"
+          >
+            Register your property
           </button>
         </div>
       </div>

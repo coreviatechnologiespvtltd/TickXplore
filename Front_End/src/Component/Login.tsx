@@ -8,7 +8,7 @@ import { authApi } from "../api";
 import { signInWithGoogle } from "../firebase";
 import type { Role } from "../api/types";
 
-type ForgotRole = "user" | "vendor" | "admin";
+type ForgotRole = "user" | "vendor" | "hotel" | "admin";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -106,7 +106,7 @@ export default function Login() {
   localStorage.setItem("userName", user.name || user.email || "User");
 
     const idKey =
-      user.role === "admin" ? "adminId" : user.role === "vendor" ? "vendorId" : "userId";
+      user.role === "admin" ? "adminId" : user.role === "vendor" ? "vendorId" : user.role === "hotel" ? "hotelId" : "userId";
     localStorage.setItem(idKey, user._id);
 
     window.dispatchEvent(new Event("storageUpdate"));
@@ -122,6 +122,8 @@ export default function Login() {
         ? "/Admin_Dashboard"
         : user.role === "vendor"
         ? "/VendorDashboard"
+        :user.role ==="hotel"
+        ? "/hoteldashboard"
         : "/";
     navigate(redirectPath);
     toast.success("Login successful!");

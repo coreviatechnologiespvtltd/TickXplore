@@ -1,6 +1,6 @@
 /** Shared domain types matching the backend API contract. */
 
-export type Role = "user" | "vendor" | "admin";
+export type Role = "user" | "vendor" | "hotel" | "admin";
 
 export interface User {
   _id: string;

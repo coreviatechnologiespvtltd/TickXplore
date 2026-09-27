@@ -5,6 +5,7 @@ const authController = require("../controllers/authController");
 const adminController = require("../controllers/adminController");
 const vendorController = require("../controllers/vendorController");
 const userController = require("../controllers/userController");
+const hotelController = require("../controllers/hotelController");
 const googleAuthController = require("../controllers/googleAuthController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -13,6 +14,7 @@ const {
   signIn,
   register,
   verifyOTP,
+  resendOTP,
   verifyResetOtp,
   resetPassword,
   changePassword,
@@ -24,10 +26,12 @@ router.post("/sign-in", signIn);
 router.post("/google-signin", googleAuthController.googleSignIn);
 router.post("/users/register", register);
 router.post("/verify-otp", verifyOTP);
+router.post("/resend-otp", resendOTP);
 
 // Forgot/Reset Password Routes
 router.post("/forgot-password/admin", adminController.forgotPassword);
 router.post("/forgot-password/vendor", vendorController.forgotPassword);
+router.post("/forgot-password/hotel", hotelController.forgotPassword);
 router.post("/forgot-password/user", userController.forgotPassword);
 router.post("/verify-reset-otp", verifyResetOtp);
 router.post("/reset-password", resetPassword);

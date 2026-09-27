@@ -66,11 +66,35 @@ const bookingRoutes = require("./routes/bookingRoutes");
 const chatbotRoutes = require('./routes/chatbotRoutes');
 const reservationRoutes = require("./routes/reservationRoutes");
 const notificationRoutes = require('./routes/notificationRoutes');
+const hotelRoutes = require("./routes/hotelRoutes");
+const publicHotelRoutes = require("./routes/publicHotelRoutes");
+const adminHotelRoutes = require("./routes/adminHotelRoutes");
+const { seedAmenityCatalog } = require("./utils/hotelAmenities");
+
+// Mirror the static amenity catalog into MongoDB once the connection is open.
+// Idempotent: existing entries are updated in place and the boot is never blocked.
+mongoose.connection.once("open", async () => {
+  const seedResult = await seedAmenityCatalog();
+  if (seedResult.ok) {
+    console.log(` Amenity catalog ready (${seedResult.count} entries)`);
+  }
+});
+
+// Hotel dashboard + public accommodation APIs
+//
+// `/admin/hotels` is mounted BEFORE the generic `/admin` router on purpose:
+// `adminRoutes` declares `router.get("/:id")`, so registering it first would
+// swallow `GET /admin/hotels` as an admin lookup by the id "hotels".
+app.use("/api/hotel", hotelRoutes);
+app.use("/hotel", hotelRoutes);
+app.use("/api/hotels", publicHotelRoutes);
+app.use("/admin/hotels", adminHotelRoutes);
 
 // API Routes
 app.use("/auth", authRoutes);
 app.use("/admin", authRoutes);
 app.use("/vendor", authRoutes);
+app.use("/hotel", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/admin", adminRoutes);
 app.use("/vendor", vendorRoutes);
