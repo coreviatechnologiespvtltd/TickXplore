@@ -128,8 +128,9 @@ const ChatBot = () => {
     <>
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-card-lg transition-colors hover:bg-blue-700"
+        className="fixed bottom-4 left-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-card-lg transition-colors hover:bg-blue-700"
         aria-label={isOpen ? "Close chat" : "Open chat"}
+        
       >
         {isOpen ? <FaTimes size={20} /> : <FaCommentDots size={22} />}
       </button>

@@ -1,5 +1,6 @@
 import { FaUserTie } from "react-icons/fa";
 import type { Bus } from "../api";
+import { formatSeatLabel } from "../utils/ticket";
 
 interface BusSeatGridProps {
   bus: Bus;
@@ -8,12 +9,6 @@ interface BusSeatGridProps {
   onToggle: (seatNumber: number) => void;
   title?: string;
 }
-
-const getSeatLabel = (seatNumber: number) => {
-  const row = Math.floor((seatNumber - 1) / 4);
-  const col = ((seatNumber - 1) % 4) + 1;
-  return `${String.fromCharCode(65 + row)}${col}`;
-};
 
 const BusSeatGrid = ({
   bus,
@@ -82,7 +77,7 @@ const BusSeatGrid = ({
                     const seatNumber = rowIndex * 4 + colNum;
                     if (seatNumber > bus.totalSeats) return null;
 
-                    const label = getSeatLabel(seatNumber);
+                    const label = formatSeatLabel(seatNumber);
                     const status = seatStatus(seatNumber);
 
                     let gapStyle = "";

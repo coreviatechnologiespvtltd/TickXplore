@@ -14,21 +14,11 @@ import {
 import { ImSpinner8 } from "react-icons/im";
 import { motion } from "framer-motion";
 import { refundsApi, type Booking } from "../api";
+import { bookingNumberOf, formatSeatLabel, routeLabelOf } from "../utils/ticket";
+import { formatTakeoffDate, formatTakeoffDateTime, toDate } from "../utils/datetime";
 
 const refName = (ref: string | { name?: string } | undefined, fallback = "N/A") =>
   typeof ref === "object" && ref ? ref.name : fallback;
-
-const refPoint = (ref: string | { pickupPoint?: string; dropPoint?: string } | undefined, key: "pickupPoint" | "dropPoint", fallback = "N/A") =>
-  typeof ref === "object" && ref ? ref[key] || fallback : fallback;
-
-// Same 4-per-row layout as the seat map in Seat_Selection (A1…J4, etc.)
-const getSeatLabel = (seatNumber: number | string) => {
-  const seat = Number(seatNumber);
-  if (!Number.isFinite(seat) || seat <= 0) return String(seatNumber);
-  const row = Math.floor((seat - 1) / 4);
-  const col = ((seat - 1) % 4) + 1;
-  return `${String.fromCharCode(65 + row)}${col}`;
-};
 
 type StatusFilter = "All" | "Booked" | "Pending" | "Cancelled";
 
@@ -89,14 +79,14 @@ const BookingHistory = () => {
     const isCoD =
       booking.paymentMethod === "CashOnVisit" || booking.paymentStatus === "CashOnVisit";
     const bookingRef = isBus ? booking.busId : booking.vehicleId;
-    const depart = booking.takeOffDate || booking.reservationDate || "";
-    const departTime =
-      typeof bookingRef === "object" && bookingRef ? bookingRef.departureTime : undefined;
-    const departDate = depart
-      ? new Date(depart).toLocaleString()
-      : departTime
-      ? departTime
-      : "N/A";
+    // Take-off straight from the database: the value snapshotted on the booking
+    // wins, then the populated bus/vehicle. Never "now", never createdAt.
+    const departure =
+      toDate(booking.takeOffDate) ||
+      toDate(booking.reservationDate) ||
+      (typeof bookingRef === "object" && bookingRef ? toDate(bookingRef.takeOffDate) : null);
+    const departDate = formatTakeoffDate(departure, { withWeekday: true });
+    const departDateTime = formatTakeoffDateTime(departure);
 
     const cancelled = (booking.status || "").toLowerCase().includes("cancel");
     const statusPill = cancelled
@@ -106,10 +96,10 @@ const BookingHistory = () => {
       : { label: booking.status || "Pending", cls: "border-amber-500/40 bg-amber-500/15 text-amber-400" };
 
     const name = refName(isBus ? booking.busId : booking.vehicleId, "Reserved Vehicle");
-    const pickup = isBus ? refPoint(booking.busId, "pickupPoint") : booking.pickupPoint || "N/A";
-    const drop = isBus ? refPoint(booking.busId, "dropPoint") : booking.dropPoint || "N/A";
+    // Canonical route: the value snapshotted on the booking wins over the ref.
+    const [pickup, drop] = routeLabelOf(booking).split(" → ");
     const seatLabels = booking.selectedSeats?.length
-      ? booking.selectedSeats.map(getSeatLabel)
+      ? booking.selectedSeats.map(formatSeatLabel)
       : [];
 
     return (
@@ -132,7 +122,7 @@ const BookingHistory = () => {
             <div>
               <h2 className="text-lg font-bold text-white sm:text-xl">{name}</h2>
               <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Booking #{booking._id.slice(-8).toUpperCase()}
+                Booking No: {bookingNumberOf(booking)}
               </p>
             </div>
           </div>
@@ -215,13 +205,7 @@ const BookingHistory = () => {
             {booking.createdAt && (
               <div className="mt-auto flex items-center gap-2 text-sm text-slate-400">
                 <FaRegClock />
-                Booked{" "}
-                {new Date(booking.createdAt).toLocaleDateString("en-IN", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                Booked {formatTakeoffDate(booking.createdAt, { withWeekday: true })}
               </div>
             )}
           </div>
@@ -229,7 +213,7 @@ const BookingHistory = () => {
 
         <div className="flex items-center gap-2 border-t border-slate-700 bg-slate-800 p-4 px-5 text-sm text-slate-400 sm:px-6">
           <FaCalendarAlt />
-          <span>Departure: {departDate}</span>
+          <span>Departure: {departDateTime}</span>
         </div>
       </motion.div>
     );

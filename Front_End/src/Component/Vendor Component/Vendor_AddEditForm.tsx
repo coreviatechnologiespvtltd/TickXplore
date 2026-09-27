@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import { toast } from "react-toastify";
 import FormInput from "./Vendor_FormInput";
 import { type Bus, type Vehicle } from "../../api";
+import { toDateTimeLocalValue } from "../../utils/datetime";
 
 interface SubmitResult {
   success?: boolean;
@@ -59,9 +60,7 @@ const AddEditForm = ({
     totalSeats: bus?.totalSeats != null ? String(bus.totalSeats) : "",
     isAvailable: vehicle?.isAvailable ?? true,
     takeOffDate:
-      type === "buses" && bus?.takeOffDate
-        ? new Date(bus.takeOffDate).toISOString().slice(0, 16)
-        : "",
+      type === "buses" && bus?.takeOffDate ? toDateTimeLocalValue(bus.takeOffDate) : "",
     tripDate: bus?.tripDate || "",
   });
 

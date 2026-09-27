@@ -5,6 +5,8 @@ import { ImSpinner8 } from "react-icons/im";
 import { MdEventSeat, MdDirectionsBus, MdDirectionsCar } from "react-icons/md";
 import { BsCalendarDate, BsCashCoin } from "react-icons/bs";
 import { refundsApi, type Booking } from "../api";
+import { bookingNumberOf } from "../utils/ticket";
+import { formatTakeoffDateTime, toDate } from "../utils/datetime";
 
 const refName = (ref: string | { name?: string } | undefined, fallback = "") =>
   typeof ref === "object" && ref ? ref.name : fallback;
@@ -103,9 +105,9 @@ const Refunds = () => {
                     isBus ? booking.busId : booking.vehicleId,
                     "Reserved Vehicle"
                   );
-                  const takeOff = new Date(
-                    booking.takeOffDate || booking.reservationDate || ""
-                  ).toLocaleString();
+                  const departure =
+                    toDate(booking.takeOffDate) || toDate(booking.reservationDate);
+                  const takeOff = departure ? formatTakeoffDateTime(departure) : "N/A";
                   const estimatedRefund = calculateRefundAmount(booking);
 
                   return (
@@ -125,7 +127,7 @@ const Refunds = () => {
                             </span>
                           </div>
                           <p className="text-sm text-slate-400">
-                            Booking ID: {booking._id.slice(-8).toUpperCase()}
+                            Booking No: {bookingNumberOf(booking)}
                           </p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                             <p className="flex items-center gap-1 text-slate-400">

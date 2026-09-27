@@ -2,6 +2,7 @@
 import api from "./http";
 import type {
   Booking,
+  BookingCreateResponse,
   Bus,
   DashboardStats,
   HomepageContent,
@@ -165,16 +166,16 @@ export const bookingsApi = {
   getCovSeats: (busId: string): Promise<{ covSeats: number[] }> =>
     api.get(`/api/payments/cov-seats/${busId}`).then((r) => r.data),
 
-  initiatePayment: (payload: Record<string, unknown>): Promise<{ payment_url?: string }> =>
+  initiatePayment: (payload: Record<string, unknown>): Promise<BookingCreateResponse> =>
     api.post("/api/payments/initiate", payload).then((r) => r.data),
 
   verifyPayment: (payload: Record<string, unknown>): Promise<{ success: boolean; data?: unknown; message?: string }> =>
     api.post("/api/payments/verify", payload).then((r) => r.data),
 
-  cashOnVisit: (payload: Record<string, unknown>): Promise<{ bookingId?: string }> =>
+  cashOnVisit: (payload: Record<string, unknown>): Promise<BookingCreateResponse> =>
     api.post("/api/payments/cash-on-visit", payload).then((r) => r.data),
 
-  sendTicket: (bookingId: string): Promise<{ message: string; emailStatus?: string }> =>
+  sendTicket: (bookingId: string): Promise<{ message: string; emailStatus?: string; bookingNumber?: string }> =>
     api.post("/api/payments/resend-ticket", { bookingId }).then((r) => r.data),
 
   getReservationsByVehicle: (vehicleId: string): Promise<unknown[]> =>
