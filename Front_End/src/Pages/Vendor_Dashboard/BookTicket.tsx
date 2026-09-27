@@ -19,9 +19,11 @@ import {
 } from "react-icons/fa";
 import { bookingsApi, homeApi, API_BASE_URL, type Booking, type Bus, type Vehicle } from "../../api";
 import { formatMoney } from "../../utils/format";
+import { bookingNumberOf, formatSeatLabel } from "../../utils/ticket";
+import { dateKey, formatTakeoffDate, formatTakeoffTime } from "../../utils/datetime";
 import AdminPageHeader from "../../Component/Admin Component/AdminPageHeader";
 import BusSeatGrid from "../../Component/BusSeatGrid";
-import BookingTicket, { getSeatLabel } from "../../Component/BookingTicket";
+import BookingTicket from "../../Component/BookingTicket";
 import EmailStatusBadge from "../../Component/EmailStatusBadge";
 
 interface OutletContext {
@@ -66,16 +68,7 @@ const imageUrlFor = (image?: string, fallback = "/default-bus-image.jpg") =>
     : fallback;
 
 const departureLabel = (d?: string | Date): string =>
-  d
-    ? new Date(d).toLocaleString("en-US", {
-        weekday: "short",
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "Date TBD";
+  d ? `${formatTakeoffDate(d, { withWeekday: true })}, ${formatTakeoffTime(d)}` : "Date TBD";
 
 const busFreeSeats = (bus: Bus): number => bus.totalSeats - (bus.bookedSeats || []).length;
 
@@ -269,19 +262,6 @@ const BookTicket = () => {
   const commissionRate = 10;
   const commissionAmount = Math.round(totalPrice * (commissionRate / 100) * 100) / 100;
   const vendorEarnings = Math.round((totalPrice - commissionAmount) * 100) / 100;
-
-  /* ---- display-only booking number, e.g. "Mountain Express-A2" ---- */
-  const bookingNumberPreview = useMemo(() => {
-    const baseName = (selectedBus?.name || selectedVehicle?.name || "")
-      .trim()
-      .replace(/\s+/g, "-");
-    if (!baseName) return "";
-    if (selectedBus) {
-      const labels = selectedSeats.map(getSeatLabel).join("-");
-      return labels ? `${baseName}-${labels}` : baseName;
-    }
-    return reservationDate ? `${baseName}-${reservationDate}` : baseName;
-  }, [selectedBus, selectedVehicle, selectedSeats, reservationDate]);
 
   const resetAll = () => {
     clearSelection();
@@ -477,7 +457,7 @@ const BookTicket = () => {
             </div>
             <h2 className="mt-2 text-lg font-bold text-slate-900">Ticket Issued</h2>
             <p className="text-sm text-slate-500">
-              Booking {createdBooking._id.slice(-8).toUpperCase()} is visible in the Bookings section
+              Booking No {bookingNumberOf(createdBooking)} is visible in the Bookings section
               under Payment Management for confirmation and settlement. The PDF ticket was emailed to the customer automatically.
             </p>
           </div>
@@ -819,7 +799,7 @@ const BookTicket = () => {
                               title="Deselect seat"
                               className="group flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-500"
                             >
-                              {getSeatLabel(seat)}
+                              {formatSeatLabel(seat)}
                               <span className="hidden text-xs text-teal-100 group-hover:block">×</span>
                             </button>
                           ))}
@@ -866,7 +846,7 @@ const BookTicket = () => {
                         type="date"
                         className={inputCls}
                         value={reservationDate}
-                        min={new Date().toISOString().split("T")[0]}
+                        min={dateKey(new Date())}
                         onChange={(e) => setReservationDate(e.target.value)}
                       />
                     </div>
@@ -944,18 +924,6 @@ const BookTicket = () => {
 
           {/* ================= RIGHT (sticky summary) ================= */}
           <aside className="space-y-6 self-start lg:sticky lg:top-6">
-            {bookingNumberPreview && (
-              <section className="rounded-2xl bg-indigo-600 p-5 text-white shadow-card">
-                <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200">
-                  Booking number
-                </p>
-                <p className="mt-1 break-words text-lg font-bold">{bookingNumberPreview}</p>
-                <p className="mt-1 text-xs text-indigo-200">
-                  Generated as you build the booking — the ticket uses its own booking ID as final reference.
-                </p>
-              </section>
-            )}
-
             <ReviewSummary
               bus={selectedBus}
               vehicle={selectedVehicle}
@@ -1164,7 +1132,7 @@ const PassengerPanel = ({
             </span>
             {bus && selectedSeats[i] !== undefined ? (
               <span className="rounded bg-teal-100 px-2 py-0.5 text-xs font-bold text-teal-700">
-                {getSeatLabel(selectedSeats[i])}
+                {formatSeatLabel(selectedSeats[i])}
               </span>
             ) : null}
           </span>
@@ -1219,11 +1187,9 @@ const ReviewSummary = ({
       { label: "Route", value: `${bus.pickupPoint || "N/A"} → ${bus.dropPoint || "N/A"}` },
       {
         label: "Departure",
-        value: bus.takeOffDate
-          ? new Date(bus.takeOffDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-          : "TBD",
+        value: bus.takeOffDate ? formatTakeoffDate(bus.takeOffDate, { withWeekday: true }) : "TBD",
       },
-      { label: "Seats", value: selectedSeats.map(getSeatLabel).join(", ") || "None" },
+      { label: "Seats", value: selectedSeats.map(formatSeatLabel).join(", ") || "None" },
       { label: "Fare", value: `${selectedSeats.length} × ${formatMoney(bus.pricePerSeat)}` }
     );
   } else if (vehicle) {
@@ -1232,9 +1198,7 @@ const ReviewSummary = ({
       { label: "Route", value: `${pickupPoint || vehicle.pickupPoint || "N/A"} → ${dropPoint || vehicle.dropPoint || "N/A"}` },
       {
         label: "Reservation date",
-        value: reservationDate
-          ? new Date(reservationDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-          : "N/A",
+        value: reservationDate ? formatTakeoffDate(reservationDate, { withWeekday: true }) : "N/A",
       },
       { label: "Rental type", value: "Whole vehicle" }
     );

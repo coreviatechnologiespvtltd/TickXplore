@@ -10,6 +10,7 @@ import {
 import { FiDownload } from "react-icons/fi";
 import { getPageRange } from "../../utils/pagination";
 import { earningsOf, formatMoney } from "../../utils/format";
+import { bookingNumberOf, formatSeatLabel } from "../../utils/ticket";
 import ConfirmDialog from "../../Component/ConfirmDialog";
 import AdminPageHeader from "../../Component/Admin Component/AdminPageHeader";
 import EmailStatusBadge from "../../Component/EmailStatusBadge";
@@ -66,7 +67,7 @@ const Bookings = () => {
         const vehicleRef = booking.vehicleId as BookingRef | undefined;
         const haystack = [
           booking._id,
-          booking._id.slice(-8),
+          booking.bookingNumber,
           user?.name,
           booking.customerName,
           booking.customerPhone,
@@ -184,7 +185,7 @@ const Bookings = () => {
 
   const exportCsv = () => {
     const headers = [
-      "Booking ID",
+      "Booking No",
       "User",
       "Transport",
       "Seats",
@@ -200,10 +201,10 @@ const Bookings = () => {
       const busRef = b.busId as BookingRef | undefined;
       const vehicleRef = b.vehicleId as BookingRef | undefined;
       return [
-        b._id,
+        bookingNumberOf(b),
         user?.name || b.customerName || "",
         busRef?.name || vehicleRef?.name || "",
-        b.selectedSeats?.join(" ") || "",
+        b.selectedSeats?.map(formatSeatLabel).join(" ") || "",
         b.totalPrice ?? 0,
         b.commissionAmount ?? 0,
         earningsOf(b),
@@ -333,7 +334,7 @@ const Bookings = () => {
               <thead>
                 <tr className="bg-indigo-600 text-white">
                   <th scope="col" className="px-4 py-3 text-left font-semibold">
-                    Booking ID
+                    Booking No
                   </th>
                   <th scope="col" className="px-4 py-3 text-left font-semibold">
                     User
@@ -373,9 +374,9 @@ const Bookings = () => {
                     <tr key={booking._id} className="transition-colors hover:bg-slate-50">
                       <td
                         className="px-4 py-3 font-mono text-xs font-semibold text-slate-600"
-                        title={booking._id}
+                        title={bookingNumberOf(booking)}
                       >
-                        #{booking._id.slice(-8).toUpperCase()}
+                        #{bookingNumberOf(booking)}
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {user?.name || booking.customerName || "N/A"}
@@ -384,7 +385,7 @@ const Bookings = () => {
                         {busRef?.name || vehicleRef?.name || "N/A"}
                       </td>
                       <td className="px-4 py-3 text-gray-700">
-                        {booking.selectedSeats?.join(", ") || "—"}
+                        {booking.selectedSeats?.map(formatSeatLabel).join(", ") || "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-indigo-700">
                         {formatMoney(booking.totalPrice, 2)}
@@ -497,9 +498,7 @@ const Bookings = () => {
       <ConfirmDialog
         open={pendingConfirm !== null}
         title="Confirm payment"
-        message={`Confirm the cash payment for booking #${pendingConfirm?._id
-          .slice(-8)
-          .toUpperCase()}?`}
+        message={`Confirm the cash payment for booking #${bookingNumberOf(pendingConfirm)}?`}
         confirmLabel="Confirm"
         tone="success"
         busy={confirmingId !== null}

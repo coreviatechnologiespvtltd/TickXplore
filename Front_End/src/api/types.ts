@@ -35,7 +35,6 @@ export interface Bus {
   tripDate?: string;
   date?: string;
   status?: string;
-  departureTime?: string;
   image?: string;
   isActive?: boolean;
   vendorId?: string;
@@ -64,17 +63,40 @@ export interface Vehicle {
 
 export type BookingStatus = "Booked" | "Pending" | "Cancelled";
 
+/**
+ * Returned by booking-creation endpoints. `bookingNumber` is the immutable
+ * customer-facing reference; `bookingId` is the internal Mongo id.
+ */
+export interface BookingCreateResponse {
+  message?: string;
+  bookingId?: string;
+  bookingNumber?: string;
+  payment_url?: string;
+  emailStatus?: string;
+  success?: boolean;
+  status?: string;
+}
+
 export interface BookingRef {
   _id?: string;
   name?: string;
   pickupPoint?: string;
   dropPoint?: string;
-  departureTime?: string;
+  takeOffDate?: string;
+  reservationDate?: string;
 }
 
 export interface Passenger {
   name?: string;
   phone?: string;
+  /** Seat number as stored (1-based); formatted to A1, B2… at display time. */
+  seat?: number | string;
+}
+
+export interface UserRef {
+  name?: string;
+  email?: string;
+  phoneNumber?: string;
 }
 
 export interface Booking {
@@ -82,7 +104,7 @@ export interface Booking {
   bookingId?: string;
   busId?: string | BookingRef;
   vehicleId?: string | BookingRef;
-  userId?: string;
+  userId?: string | UserRef | null;
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
@@ -105,7 +127,7 @@ export interface Booking {
   dropPoint?: string;
   paymentMethod?: string;
   paymentStatus?: string;
-  user?: { name?: string; email?: string };
+  user?: UserRef;
   bus?: BookingRef;
   vehicle?: BookingRef;
 }

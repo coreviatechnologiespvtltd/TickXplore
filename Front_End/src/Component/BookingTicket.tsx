@@ -15,29 +15,9 @@ import { ImSpinner8 } from "react-icons/im";
 import { motion } from "framer-motion";
 import html2pdf from "html2pdf.js";
 import type { Booking } from "../api";
-
-/* eslint-disable-next-line react-refresh/only-export-components */
-export const refName = (
-  ref: string | { name?: string } | undefined,
-  fallback = "N/A"
-) => (typeof ref === "object" && ref ? ref.name : fallback);
-
-/* eslint-disable-next-line react-refresh/only-export-components */
-export const refPoint = (
-  ref: string | { pickupPoint?: string; dropPoint?: string } | undefined,
-  key: "pickupPoint" | "dropPoint",
-  fallback = "N/A"
-) => (typeof ref === "object" && ref ? ref[key] || fallback : fallback);
-
-// Same 4-per-row layout as the seat map in Seat_Selection (A1…J4, etc.)
-/* eslint-disable-next-line react-refresh/only-export-components */
-export const getSeatLabel = (seatNumber: number | string) => {
-  const seat = Number(seatNumber);
-  if (!Number.isFinite(seat) || seat <= 0) return String(seatNumber);
-  const row = Math.floor((seat - 1) / 4);
-  const col = ((seat - 1) % 4) + 1;
-  return `${String.fromCharCode(65 + row)}${col}`;
-};
+import type { TicketView } from "../utils/ticket";
+import { buildTicketView } from "../utils/ticket";
+import { formatTakeoffDate } from "../utils/datetime";
 
 interface BookingTicketProps {
   booking: Booking;
@@ -45,6 +25,12 @@ interface BookingTicketProps {
   onCancel?: (id: string) => void;
   onEmail?: (id: string) => Promise<void> | void;
 }
+
+/** User-supplied names and points are interpolated into an HTML string below. */
+const escapeHtml = (value: unknown): string =>
+  String(value ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string)
+  );
 
 const BookingTicket = ({
   booking,
@@ -55,11 +41,11 @@ const BookingTicket = ({
   const [downloading, setDownloading] = useState(false);
   const [emailing, setEmailing] = useState(false);
 
-  const isBus = !!booking.busId;
-  const isCoD =
-    booking.paymentMethod === "CashOnVisit" || booking.paymentStatus === "CashOnVisit";
-
-  const passengers = booking.passengers?.filter((p) => p && p.name) || [];
+  /* One view model drives both the card and the PDF, and it mirrors the model
+     the server uses for the emailed ticket — so all three always agree. */
+  const view: TicketView = buildTicketView(booking);
+  const isBus = view.isBus;
+  const isCoD = view.paymentLabel === "Cash on Visit";
 
   const handleEmail = async () => {
     if (!onEmail) return;
@@ -71,133 +57,108 @@ const BookingTicket = ({
     }
   };
 
-  const bookingRef = isBus ? booking.busId : booking.vehicleId;
-  const depart = booking.takeOffDate || booking.reservationDate || "";
-  const departTime =
-    typeof bookingRef === "object" && bookingRef ? bookingRef.departureTime : undefined;
-  const departDate = depart
-    ? new Date(depart).toLocaleString()
-    : departTime
-    ? departTime
-    : "N/A";
+  /* Layout mirrors Back_End/utils/ticketService.js buildTicketHtml() field for
+     field, so a downloaded ticket matches the one sent by email. */
+  const buildTicketHtml = () => {
+    const row = (label: string, value: unknown) => `
+      <tr>
+        <td style="padding: 9px 0; color: #6b7280; width: 42%; vertical-align: top;">${escapeHtml(label)}</td>
+        <td style="padding: 9px 0; font-weight: 700; color: #0f172a;">${escapeHtml(value)}</td>
+      </tr>`;
 
-  const customerName = booking.customerName || (typeof booking.userId === "object" && booking.userId ? refName(booking.userId, "") : "");
+    const passengerRows = view.passengers.length
+      ? view.passengers
+          .map(
+            (p) =>
+              `<tr><td>${escapeHtml(p.seat || "-")}</td><td>${escapeHtml(p.name)}</td><td>${escapeHtml(
+                p.phone || "-"
+              )}</td></tr>`
+          )
+          .join("")
+      : "";
+
+    return `
+      <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #ffffff;">
+        <div style="background: #2563eb; color: #fff; padding: 18px 22px;">
+          <h2 style="margin: 0; font-size: 20px;">BUS TICKET — TickXplore</h2>
+        </div>
+        <div style="padding: 22px;">
+          <p style="margin: 0 0 6px; color: #6b7280; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;">Booking Number</p>
+          <p style="margin: 0 0 18px; font-size: 22px; font-weight: 700; color: #1d4ed8;">${escapeHtml(view.bookingNumber)}</p>
+
+          <p style="margin: 0 0 14px;">Dear <strong>${escapeHtml(view.passengerName)}</strong>, here are your travel details:</p>
+
+          <table style="width: 100%; border-collapse: collapse;">
+            ${row("Passenger", view.passengerName)}
+            ${row("Phone", view.passengerPhone)}
+            ${row(view.transportLabel, view.isBus ? view.busName : view.seatLabel)}
+            ${row("Seat", view.seatLabel)}
+            ${row("Route", view.routeLabel)}
+            ${row("Pickup Point", view.pickupPoint)}
+            ${row("Dropping Point", view.dropPoint)}
+            ${row("Takeoff Date", view.takeoffDateLabel)}
+            ${row("Takeoff Time", view.takeoffTimeLabel)}
+            ${row("Total Paid", `Rs. ${view.totalPrice}`)}
+            ${row("Payment", view.paymentLabel)}
+            ${row("Status", view.status)}
+          </table>
+
+          ${
+            passengerRows
+              ? `<p style="color: #6b7280; margin: 20px 0 6px; font-size: 13px; font-weight: 700;">Passengers</p>
+                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                   <tr style="background: #f3f4f6; text-align: left;">
+                     <th style="padding: 8px;">Seat</th><th style="padding: 8px;">Name</th><th style="padding: 8px;">Phone</th>
+                   </tr>${passengerRows}
+                 </table>`
+              : ""
+          }
+
+          <p style="font-size: 11px; color: #9ca3af; margin: 22px 0 0;">
+            This ticket is also attached as a PDF. Please bring this booking number to boarding.
+            For any changes contact TickXplore support.
+          </p>
+        </div>
+      </div>`;
+  };
 
   const handleDownloadPDF = () => {
     setDownloading(true);
 
     const element = document.createElement("div");
     element.style.width = "600px";
-    element.style.padding = "20px";
-    element.style.backgroundColor = "#0f172a";
-    element.style.color = "#ffffff";
-    element.style.borderRadius = "12px";
-    element.style.fontFamily = "Arial, sans-serif";
-
-    element.innerHTML = `
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">Travel Ticket</h2>
-        <p style="color: #94a3b8;">Booking Confirmation</p>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">Booking ID</p>
-          <p style="font-size: 16px;">${booking._id.slice(-8).toUpperCase()}</p>
-        </div>
-        ${customerName ? `<div><p style="color: #94a3b8; font-size: 14px;">Passenger</p><p style="font-size: 16px;">${customerName}</p></div>` : ""}
-      </div>
-
-      <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">${isBus ? "Bus" : "Vehicle"} Name</p>
-          <p style="font-size: 16px; font-weight: bold;">${refName(
-            isBus ? booking.busId : booking.vehicleId
-          )}</p>
-        </div>
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">Total Paid</p>
-          <p style="font-size: 18px; font-weight: bold; color: #a78bfa;">NPR ${booking.totalPrice}</p>
-        </div>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">Departure</p>
-          <p style="font-size: 16px; font-weight: bold;">
-            ${isBus ? refPoint(booking.busId, "pickupPoint") : booking.pickupPoint || "N/A"}
-          </p>
-        </div>
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">Destination</p>
-          <p style="font-size: 16px; font-weight: bold;">
-            ${isBus ? refPoint(booking.busId, "dropPoint") : booking.dropPoint || "N/A"}
-          </p>
-        </div>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">Seats</p>
-          <p style="font-size: 16px;">
-            ${booking.selectedSeats?.length ? booking.selectedSeats.map(String).join(", ") : "N/A"}
-          </p>
-        </div>
-        <div>
-          <p style="color: #94a3b8; font-size: 14px;">Departure Time</p>
-          <p style="font-size: 16px;">${departDate}</p>
-        </div>
-      </div>
-
-      ${
-        passengers.length
-          ? `<div style="margin-bottom: 20px;">
-            <p style="color: #94a3b8; font-size: 14px;">Passengers</p>
-            ${passengers
-              .map(
-                (p) =>
-                  `<p style="font-size: 14px;">${p.name}${p.phone ? ` — ${p.phone}` : ""}</p>`
-              )
-              .join("")}
-          </div>`
-          : ""
-      }
-
-      <div style="border-top: 1px solid #334155; padding-top: 15px; text-align: center; color: #94a3b8;">
-        Thank you for choosing our service
-      </div>
-    `;
+    element.innerHTML = buildTicketHtml();
 
     document.body.appendChild(element);
 
     window.setTimeout(() => {
-      const opt = {
-        margin: 10,
-        filename: `ticket-${booking._id.slice(-6)}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          logging: true,
-          useCORS: true,
-          scrollY: 0,
-          windowWidth: element.scrollWidth,
-          windowHeight: element.scrollHeight,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      const cleanup = () => {
+        setDownloading(false);
+        element.remove();
       };
 
       html2pdf()
-        .set(opt)
+        .set({
+          margin: 10,
+          /* Named after the real booking number, not a slice of the internal id. */
+          filename: `ticket-${view.bookingNumber}.pdf`,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            logging: false,
+            useCORS: true,
+            scrollY: 0,
+            windowWidth: element.scrollWidth,
+            windowHeight: element.scrollHeight,
+          },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
         .from(element)
         .save()
-        .then(() => {
-          setDownloading(false);
-          document.body.removeChild(element);
-        })
+        .then(cleanup)
         .catch((err: unknown) => {
           console.error("PDF generation error:", err);
-          setDownloading(false);
-          document.body.removeChild(element);
+          cleanup();
         });
     }, 300);
   };
@@ -222,13 +183,11 @@ const BookingTicket = ({
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">
-                {refName(isBus ? booking.busId : booking.vehicleId, "Reserved Vehicle")}
+                {isBus ? view.busName : "Reserved Vehicle"}
               </h2>
-              <p className="text-sm text-slate-400">
-                Booking ID: {booking._id.slice(-8).toUpperCase()}
-              </p>
-              {customerName && (
-                <p className="text-sm text-slate-400">Passenger: {customerName}</p>
+              <p className="text-sm text-slate-400">Booking No: {view.bookingNumber}</p>
+              {view.passengerName !== "N/A" && (
+                <p className="text-sm text-slate-400">Passenger: {view.passengerName}</p>
               )}
             </div>
           </div>
@@ -237,18 +196,14 @@ const BookingTicket = ({
             <div className="flex items-center gap-3">
               <FaMapMarkerAlt className="text-slate-400" />
               <div>
-                <p className="font-medium text-white">
-                  {isBus ? refPoint(booking.busId, "pickupPoint") : booking.pickupPoint || "N/A"}
-                </p>
+                <p className="font-medium text-white">{view.pickupPoint}</p>
                 <p className="text-sm text-slate-400">Departure</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <FaMapMarkerAlt className="text-slate-400" />
               <div>
-                <p className="font-medium text-white">
-                  {isBus ? refPoint(booking.busId, "dropPoint") : booking.dropPoint || "N/A"}
-                </p>
+                <p className="font-medium text-white">{view.dropPoint}</p>
                 <p className="text-sm text-slate-400">Destination</p>
               </div>
             </div>
@@ -260,20 +215,21 @@ const BookingTicket = ({
             <FaChair className="text-xl text-emerald-400" />
             <div>
               <h3 className="font-semibold text-white">Seats</h3>
-              <p className="text-slate-300">
-                {booking.selectedSeats?.length
-                  ? booking.selectedSeats.map(getSeatLabel).join(", ")
-                  : isBus
-                  ? "Not specified"
-                  : "Full Reserved"}
-              </p>
+              <p className="text-slate-300">{view.seatLabel}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <FaTag className="text-xl text-purple-400" />
             <div>
               <h3 className="font-semibold text-white">Total Paid</h3>
-              <p className="text-xl font-bold text-white">NPR {booking.totalPrice}</p>
+              <p className="text-xl font-bold text-white">NPR {view.totalPrice}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <FaRegClock className="text-xl text-sky-400" />
+            <div>
+              <h3 className="font-semibold text-white">Payment</h3>
+              <p className="text-slate-300">{view.paymentLabel}</p>
             </div>
           </div>
         </div>
@@ -284,28 +240,23 @@ const BookingTicket = ({
               className={`w-fit rounded-full px-4 py-1 text-sm font-semibold ${
                 isCoD
                   ? "bg-blue-900/30 text-blue-400"
-                  : booking.status === "Booked"
+                  : view.status === "Booked"
                   ? "bg-green-900/30 text-green-400"
                   : "bg-red-900/30 text-red-400"
               }`}
             >
-              {booking.status === "Booked"
+              {view.status === "Booked"
                 ? isCoD
                   ? "Booked (Cash on Visit)"
-                  : booking.status
+                  : view.status
                 : isCoD
                 ? "Pending (Cash on Visit)"
-                : booking.status}
+                : view.status}
             </span>
             {booking.createdAt && (
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <FaRegClock />
-                {new Date(booking.createdAt).toLocaleDateString("en-IN", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {formatTakeoffDate(booking.createdAt, { withWeekday: true })}
               </div>
             )}
           </div>
@@ -351,19 +302,22 @@ const BookingTicket = ({
         </div>
       </div>
 
-      {passengers.length > 0 && (
+      {view.passengers.length > 0 && (
         <div className="border-t border-slate-600 p-4 md:p-6">
           <div className="flex items-center gap-2">
             <FaChair className="text-emerald-400" />
             <h3 className="font-semibold text-white">Passengers</h3>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {passengers.map((p, i) => (
+            {view.passengers.map((p, i) => (
               <div
                 key={i}
                 className="flex items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-sm"
               >
-                <span className="font-medium text-white">{p.name}</span>
+                <span className="font-medium text-white">
+                  {p.seat ? `${p.seat} · ` : ""}
+                  {p.name}
+                </span>
                 {p.phone && <span className="text-slate-400">{p.phone}</span>}
               </div>
             ))}
@@ -373,7 +327,7 @@ const BookingTicket = ({
 
       <div className="flex items-center gap-2 border-t border-slate-600 bg-slate-800 p-4 text-sm text-slate-400">
         <FaCalendarAlt />
-        <span>Departure: {departDate}</span>
+        <span>Departure: {view.takeoffDateTimeLabel}</span>
       </div>
     </motion.div>
   );

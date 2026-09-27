@@ -4,6 +4,7 @@ import { FiCalendar, FiArrowRight, FiRefreshCw } from "react-icons/fi";
 import { useParams, useNavigate } from "react-router-dom";
 import { homeApi, bookingsApi, API_BASE_URL } from "../api";
 import type { Vehicle } from "../api/types";
+import { dateKey } from "../utils/datetime";
 
 interface VehicleWithAvailability extends Vehicle {
   isAvailable: boolean;
@@ -265,7 +266,7 @@ const VehicleReservation = () => {
                     className="input-field"
                     value={takeOffDate}
                     onChange={(e) => setTakeOffDate(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
+                    min={dateKey(new Date())}
                   />
                   <input
                     type="text"

@@ -17,6 +17,8 @@ import { toast } from "react-toastify";
 import { ClipLoader } from "react-spinners";
 import { bookingsApi, homeApi, API_BASE_URL, type Bus } from "../api";
 import BusSeatGrid from "../Component/BusSeatGrid";
+import { formatSeatLabel } from "../utils/ticket";
+import { formatTakeoffDate } from "../utils/datetime";
 
 const SeatAvailability = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,12 +59,6 @@ const SeatAvailability = () => {
     };
     fetchBuses();
   }, [id]);
-
-  const getSeatLabel = (seatNumber: number) => {
-    const row = Math.floor((seatNumber - 1) / 4);
-    const col = ((seatNumber - 1) % 4) + 1;
-    return `${String.fromCharCode(65 + row)}${col}`;
-  };
 
   const handleSeatSelection = (seatNumber: number) => {
     if (!selectedBus) return;
@@ -161,7 +157,7 @@ const SeatAvailability = () => {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <p className="font-semibold">Seats:</p>
-                  <p>{selectedSeats.map(getSeatLabel).join(", ")}</p>
+                  <p>{selectedSeats.map(formatSeatLabel).join(", ")}</p>
                 </div>
                 <div>
                   <p className="font-semibold">Total:</p>
@@ -221,7 +217,7 @@ const SeatAvailability = () => {
       toast.dismiss();
       showCashOnVisitToast(
         `Cash on Visit booking placed! Seats: ${selectedSeats
-          .map(getSeatLabel)
+          .map(formatSeatLabel)
           .join(", ")}. Reference: ${
           (response as { bookingId?: string }).bookingId
         }. Please pay when boarding — booking is pending confirmation.`
@@ -314,7 +310,7 @@ const SeatAvailability = () => {
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium">
                   <FaCalendarAlt className="text-teal-300" />
-                  {new Date(selectedBus.takeOffDate || "").toLocaleDateString("en-US")}
+                  {formatTakeoffDate(selectedBus.takeOffDate)}
                 </span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium">
                   NPR {selectedBus.pricePerSeat} / seat
@@ -359,7 +355,7 @@ const SeatAvailability = () => {
                   Trip Date
                 </p>
                 <p className="mt-1 font-semibold text-slate-900">
-                  {new Date(selectedBus.takeOffDate || "").toLocaleDateString("en-US")}
+                  {formatTakeoffDate(selectedBus.takeOffDate)}
                 </p>
               </div>
               <div className="rounded-xl bg-slate-50 p-4">
@@ -424,7 +420,7 @@ const SeatAvailability = () => {
                       title="Deselect seat"
                       className="group flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-500"
                     >
-                      {getSeatLabel(seatNumber)}
+                      {formatSeatLabel(seatNumber)}
                       <FaTimes className="hidden text-xs text-teal-100 group-hover:block" />
                     </button>
                   ))}

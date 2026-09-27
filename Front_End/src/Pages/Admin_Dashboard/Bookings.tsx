@@ -9,6 +9,7 @@ import {
   FaSearch,
 } from "react-icons/fa";
 import { getPageRange } from "../../utils/pagination";
+import { bookingNumberOf, formatSeatLabel } from "../../utils/ticket";
 import AdminPageHeader from "../../Component/Admin Component/AdminPageHeader";
 import EmailStatusBadge from "../../Component/EmailStatusBadge";
 import { bookingsApi, type Booking } from "../../api";
@@ -59,6 +60,7 @@ const Bookings = () => {
     .filter((booking) => {
       const query = searchQuery.toLowerCase();
       return (
+        (booking.bookingNumber ?? "").includes(searchQuery) ||
         booking._id.includes(searchQuery) ||
         booking.user?.name?.toLowerCase().includes(query) ||
         booking.bus?.name?.toLowerCase().includes(query) ||
@@ -225,7 +227,7 @@ const Bookings = () => {
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead>
               <tr className="bg-indigo-600 text-white">
-                <th className="px-4 py-3 text-left font-semibold">Booking ID</th>
+                <th className="px-4 py-3 text-left font-semibold">Booking No</th>
                 <th className="px-4 py-3 text-left font-semibold">User</th>
                 <th className="px-4 py-3 text-left font-semibold">
                   {bookingType === "bus" ? "Bus" : "Vehicle"}
@@ -251,9 +253,9 @@ const Bookings = () => {
                 <tr key={booking._id} className="transition-colors hover:bg-slate-50">
                   <td
                     className="px-4 py-3 font-mono text-xs font-semibold text-slate-600"
-                    title={booking._id}
+                    title={bookingNumberOf(booking)}
                   >
-                    #{booking._id.slice(-8).toUpperCase()}
+                    #{bookingNumberOf(booking)}
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     {booking.user?.name || "N/A"}
@@ -263,7 +265,7 @@ const Bookings = () => {
                   </td>
                   {bookingType === "bus" ? (
                     <td className="px-4 py-3 text-gray-700">
-                      {booking.selectedSeats?.join(", ") || "—"}
+                      {booking.selectedSeats?.map(formatSeatLabel).join(", ") || "—"}
                     </td>
                   ) : (
                     <>
