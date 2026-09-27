@@ -183,7 +183,7 @@ exports.confirmCoDBooking = async (req, res) => {
       await Notification.create({
         userId: vendorId,
         role: "vendor",
-        message: `Cash on Visit payment confirmed for booking ${booking._id}.`,
+        message: `Cash on Visit payment confirmed for booking ${booking.bookingNumber || booking._id}.`,
       });
     }
 

@@ -72,7 +72,7 @@ const Payment = () => {
         </p>
         <button
           onClick={handlePayment}
-          className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-lg font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition-colors hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
           disabled={loading}
         >
           {loading ? <ClipLoader color="#fff" size={20} /> : "Proceed to Khalti Payment"}

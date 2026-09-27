@@ -658,7 +658,7 @@ const VendorDashboard = () => {
                         </Link>
                         <Link
                           to="/VendorDashboard/bookings"
-                          className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-5 text-white shadow-card transition-all hover:shadow-card-lg"
+                          className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-emerald-700 p-5 text-white shadow-card transition-all hover:shadow-card-lg"
                         >
                           <div>
                             <h3 className="text-lg font-bold md:text-xl">Confirm Payments</h3>
@@ -672,7 +672,7 @@ const VendorDashboard = () => {
                         </Link>
                         <Link
                           to="/VendorDashboard/buses"
-                          className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 p-5 text-white shadow-card transition-all hover:shadow-card-lg"
+                          className="group relative flex flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-blue-700 to-slate-700 p-5 text-white shadow-card transition-all hover:shadow-card-lg"
                         >
                           <div>
                             <h3 className="text-lg font-bold md:text-xl">Manage Fleet</h3>

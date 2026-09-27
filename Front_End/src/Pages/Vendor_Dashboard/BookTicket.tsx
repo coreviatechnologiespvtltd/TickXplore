@@ -1271,7 +1271,7 @@ const PaymentPanel = ({
             onClick={() => setPaymentMethod("CashOnVisit")}
             className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
               paymentMethod === "CashOnVisit"
-                ? "bg-emerald-600 text-white shadow"
+                ? "bg-blue-600 text-white shadow"
                 : "text-slate-600 hover:bg-white"
             }`}
           >

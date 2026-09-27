@@ -350,9 +350,11 @@ exports.deleteVendorByAdmin = async (req, res) => {
 exports.getAllBookings = async (req, res) => {
   try {
     const bookings = await Booking.find()
-      .populate("userId", "name email") 
-      .populate("busId", "name pickupPoint dropPoint")
-      .populate("vehicleId", "name price")
+      .populate("userId", "name email phoneNumber")
+      /* takeOffDate is the trip's departure instant; without it the admin
+         ticket view falls back to "N/A" on legacy rows. */
+      .populate("busId", "name pickupPoint dropPoint takeOffDate")
+      .populate("vehicleId", "name price pickupPoint dropPoint")
       .sort({ createdAt: -1 });
 
     const formattedBookings = bookings.map(b => ({
