@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, refPath: 'role' }, // ref to User/Vendor/Admin
   role: {
     type: String,
-    enum: ['user', 'vendor', 'admin'],
+    enum: ['user', 'vendor', 'admin', 'hotel'],
     required: true,
   },
   message: {

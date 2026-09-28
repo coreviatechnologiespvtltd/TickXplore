@@ -8,7 +8,7 @@ import { authApi } from "../api";
 import { signInWithGoogle } from "../firebase";
 import type { Role } from "../api/types";
 
-type ForgotRole = "user" | "vendor" | "admin";
+type ForgotRole = "user" | "vendor" | "hotel" | "admin";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -106,7 +106,7 @@ export default function Login() {
   localStorage.setItem("userName", user.name || user.email || "User");
 
     const idKey =
-      user.role === "admin" ? "adminId" : user.role === "vendor" ? "vendorId" : "userId";
+      user.role === "admin" ? "adminId" : user.role === "vendor" ? "vendorId" : user.role === "hotel" ? "hotelId" : "userId";
     localStorage.setItem(idKey, user._id);
 
     window.dispatchEvent(new Event("storageUpdate"));
@@ -122,6 +122,8 @@ export default function Login() {
         ? "/Admin_Dashboard"
         : user.role === "vendor"
         ? "/VendorDashboard"
+        :user.role ==="hotel"
+        ? "/hoteldashboard"
         : "/";
     navigate(redirectPath);
     toast.success("Login successful!");
@@ -185,19 +187,13 @@ export default function Login() {
       return;
     }
 
-    if (!otp) {
-      toast.error("OTP is required. Please verify OTP first.");
-      return;
-    }
-
     try {
-      const data = await authApi.resetPassword({ email: resetEmail, otp, newPassword, role: selectedRole });
+      const data = await authApi.resetPassword({ email: resetEmail, newPassword, role: selectedRole });
 
       if ((data as { success?: boolean }).success) {
         toast.success("Password reset successfully!");
         setForgotPasswordMode(false);
         setResetSent(false);
-        setOtp("");
       }
     } catch (err) {
       console.error("Password reset error:", err);
