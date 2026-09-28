@@ -232,6 +232,16 @@ export const bookingsApi = {
 
   getReservationsByVendor: (vendorId: string): Promise<unknown[]> =>
     api.get(`/api/reservations/vendor/${vendorId}`).then((r) => r.data),
+
+  /* --------------------------- Hotel Bookings (Admin) --------------------------- */
+  getHotelBookings: (params?: Record<string, unknown>) =>
+    api.get("/api/bookings/hotel", { params }).then((r) => r.data),
+
+  getHotelBooking: (id: string) =>
+    api.get(`/api/bookings/hotel/${id}`).then((r) => r.data),
+
+  getHotelBookedUsers: (params?: Record<string, unknown>) =>
+    api.get("/api/bookings/hotel/users", { params }).then((r) => r.data),
 };
 
 /* ------------------------------------------------------------------ */
@@ -314,6 +324,43 @@ export const adminApi = {
 
   deleteAdmin: (adminId: string) =>
     api.delete(`/admin/${adminId}`).then((r) => r.data),
+
+  /* --------------------------- Hotels --------------------------- */
+  getHotels: (params?: Record<string, unknown>) =>
+    api.get("/admin/hotels", { params }).then((r) => r.data),
+
+  getHotel: (id: string) =>
+    api.get(`/admin/hotels/${id}`).then((r) => r.data),
+
+  getPendingHotelListings: () =>
+    api.get("/admin/hotels/pending").then((r) => r.data),
+
+  getHotelStatusSummary: () =>
+    api.get("/admin/hotels/summary").then((r) => r.data),
+
+  approveHotelListing: (hotelId: string, reason?: string) =>
+    api.put(`/admin/hotels/${hotelId}/review/approve`, { reason }).then((r) => r.data),
+
+  rejectHotelListing: (hotelId: string, reason: string) =>
+    api.put(`/admin/hotels/${hotelId}/review/reject`, { reason }).then((r) => r.data),
+
+  suspendHotelListing: (hotelId: string, reason?: string) =>
+    api.put(`/admin/hotels/${hotelId}/status/suspend`, { reason }).then((r) => r.data),
+
+  reinstateHotelListing: (hotelId: string, reason?: string) =>
+    api.put(`/admin/hotels/${hotelId}/status/reinstate`, { reason }).then((r) => r.data),
+
+  archiveHotelListing: (hotelId: string, reason?: string) =>
+    api.put(`/admin/hotels/${hotelId}/status/archive`, { reason }).then((r) => r.data),
+
+  activateHotelAccount: (hotelId: string, isActive: boolean) =>
+    api.put(`/admin/hotels/${hotelId}/activate`, { isActive }).then((r) => r.data),
+
+  updateHotel: (hotelId: string, data: Record<string, unknown>) =>
+    api.put(`/admin/hotels/${hotelId}`, data).then((r) => r.data),
+
+  deleteHotel: (hotelId: string) =>
+    api.delete(`/admin/hotels/${hotelId}`).then((r) => r.data),
 };
 
 /* ------------------------------------------------------------------ */
