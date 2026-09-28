@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
 const fileUpload = require("express-fileupload");
@@ -12,19 +13,129 @@ require("dotenv").config({ path: path.join(__dirname, "../.env") });
 // Initialize Express App
 const app = express();
 
-// Middleware Configuration
-app.use(cors({
-  origin: "http://localhost:5173", 
-  credentials: true               
-}));
+// CORS Configuration - use CLIENT_URL from env
+const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+const allowedOrigins = clientUrl.split(",").map(origin => origin.trim());
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
+app.use(cors(corsOptions));
 app.use(morgan("dev"));
-app.use(helmet({ 
-  crossOriginResourcePolicy: { policy: "cross-origin" }, 
-  crossOriginEmbedderPolicy: false 
+
+// Helmet with CSP Configuration
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://accounts.google.com",
+        "https://apis.google.com",
+        "https://www.gstatic.com",
+        "https://www.google.com",
+        "https://js.stripe.com",
+        "https://checkout.stripe.com",
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://fonts.googleapis.com",
+        "https://accounts.google.com",
+      ],
+      fontSrc: [
+        "'self'",
+        "https://fonts.gstatic.com",
+        "data:",
+      ],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://tickxplore.firebasestorage.app",
+        "https://lh3.googleusercontent.com",
+        "https://firebasestorage.googleapis.com",
+        "https://*.googleusercontent.com",
+      ],
+      connectSrc: [
+        "'self'",
+        "https://tickxplore.firebaseapp.com",
+        "https://tickxplore-default-rtdb.firebaseio.com",
+        "https://identitytoolkit.googleapis.com",
+        "https://securetoken.googleapis.com",
+        "https://www.googleapis.com",
+        "https://khalti.com",
+        "https://api.khalti.com",
+      ],
+      frameSrc: [
+        "'self'",
+        "https://accounts.google.com",
+        "https://khalti.com",
+        "https://checkout.stripe.com",
+      ],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Rate Limiting - General API limiter
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: "Too many requests, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter rate limiter for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 requests per windowMs for auth endpoints
+  message: { error: "Too many authentication attempts, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// OTP rate limiter - stricter
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 OTP requests per windowMs
+  message: { error: "Too many OTP requests, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api/", generalLimiter);
+app.use("/auth/sign-in", authLimiter);
+app.use("/auth/register", authLimiter);
+app.use("/auth/forgot-password", otpLimiter);
+app.use("/auth/verify-reset-otp", otpLimiter);
+app.use("/auth/reset-password", authLimiter);
+app.use("/auth/verify-otp", otpLimiter);
+app.use("/auth/google-signin", authLimiter);
+app.use("/api/verify-otp", otpLimiter);
+app.use("/api/resend-otp", otpLimiter);
 
 // Enable File Upload Handling
 app.use(fileUpload({

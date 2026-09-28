@@ -1,6 +1,5 @@
-const fs = require("fs");
-const path = require("path");
 const HomepageContent = require("../models/HomepageContent");
+const { safeUpload, safeDelete } = require("../utils/safeUpload");
 
 //Get Homepage Content
 exports.getHomepageContent = async (req, res) => {
@@ -24,23 +23,22 @@ exports.updateHomepageContent = async (req, res) => {
       }
   
       let imageFile = req.files.backgroundImage;
-      let uploadPath = path.join(__dirname, "../uploads/", imageFile.name);
   
-      imageFile.mv(uploadPath, async (err) => {
-        if (err) {
-          return res.status(500).json({ message: "File upload failed", error: err });
-        }
+      let backgroundImage;
+      try {
+        const result = await safeUpload(imageFile);
+        backgroundImage = result.relativePath;
+      } catch (uploadError) {
+        return res.status(400).json({ message: uploadError.message });
+      }
   
-        const backgroundImage = `/uploads/${imageFile.name}`;
+      const updatedContent = await HomepageContent.findOneAndUpdate(
+        {},
+        { title: req.body.title, backgroundImage },
+        { new: true, upsert: true }
+      );
   
-        const updatedContent = await HomepageContent.findOneAndUpdate(
-          {},
-          { title: req.body.title, backgroundImage },
-          { new: true, upsert: true }
-        );
-  
-        res.status(200).json(updatedContent);
-      });
+      res.status(200).json(updatedContent);
   
     } catch (error) {
       res.status(500).json({ message: "Error updating homepage content", error });

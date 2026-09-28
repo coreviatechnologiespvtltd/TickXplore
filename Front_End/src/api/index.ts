@@ -34,7 +34,7 @@ export const authApi = {
   verifyResetOtp: (data: { email: string; otp: string; role: string }) =>
     api.post("/auth/verify-reset-otp", data).then((r) => r.data),
 
-  resetPassword: (data: { email: string; newPassword: string; role: string }) =>
+  resetPassword: (data: { email: string; otp: string; newPassword: string; role: string }) =>
     api.post("/auth/reset-password", data).then((r) => r.data),
 
   changePassword: (

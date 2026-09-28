@@ -91,18 +91,6 @@ exports.register = async (req, res) => {
           message: `A new vendor, ${vendorName}, has registered. Please review and activate their account.`,
         });
       }
-    } else if (role === "admin") {
-      newUser = await AdminModel.create({
-        name,
-        location,
-        email,
-        phoneNumber,
-        password: hashedPassword,
-        role,
-        otp,
-        otpExpires: Date.now() + 10 * 60 * 1000,
-        isVerified: false,
-      });
     }
 
     // Send OTP email
@@ -274,6 +262,8 @@ exports.verifyResetOtp = async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
+    // OTP verified successfully - don't clear resetCode yet, let resetPassword do that
+    // But we can return success
     return res.status(200).json({ success: true, message: "OTP verified" });
   } catch (err) {
     res.status(500).json({ message: "OTP verification failed", error: err.message });
@@ -281,7 +271,7 @@ exports.verifyResetOtp = async (req, res) => {
 };
 
 exports.resetPassword = async (req, res) => {
-  const { email, newPassword, role } = req.body;
+  const { email, otp, newPassword, role } = req.body;
   let userModel;
 
   if (role === "admin") {
@@ -294,10 +284,14 @@ exports.resetPassword = async (req, res) => {
     return res.status(400).json({ message: "Invalid role" });
   }
 
+  if (!otp) {
+    return res.status(400).json({ message: "OTP is required" });
+  }
+
   try {
     const user = await userModel.findOne({ email });
-    if (!user || !user.resetCode) {
-      return res.status(404).json({ message: "Invalid or expired request" });
+    if (!user || !user.resetCode || user.resetCode !== otp || Date.now() > user.resetCodeExpires) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
     user.password = await bcrypt.hash(newPassword, 10);

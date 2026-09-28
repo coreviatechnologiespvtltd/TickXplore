@@ -1,11 +1,10 @@
 const bcrypt = require("bcryptjs");
-const path = require("path");
-const fs = require("fs");
 const UserModel = require("../models/User");
 const VendorModel = require("../models/Vendor");
 const AdminModel = require("../models/Admin");
 const Notification = require("../models/Notification");
 const { sendEmail } = require("../utils/sendEmail");
+const { safeUpload, safeDelete } = require("../utils/safeUpload");
 
 // Get User Profile
 exports.getProfile = async (req, res) => {
@@ -246,26 +245,19 @@ exports.updateUser = async (req, res) => {
     if (req.files && req.files.profilePhoto) {
       const photo = req.files.profilePhoto;
 
-      //  Ensure uploads directory exists
-      const uploadPath = path.join(__dirname, "../uploads");
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath);
-      }
-
-      //  Delete old photo
       if (existingUser.profilePhoto) {
-        const oldPhotoPath = path.join(uploadPath, path.basename(existingUser.profilePhoto));
-        if (fs.existsSync(oldPhotoPath)) {
-          fs.unlinkSync(oldPhotoPath);
-        }
+        await safeDelete(existingUser.profilePhoto);
       }
 
-      // Save new photo
-      const filename = `${photo.name}`;
-      const filepath = path.join(uploadPath, filename);
-      await photo.mv(filepath);
+      let profilePhotoUrl;
+      try {
+        const result = await safeUpload(photo);
+        profilePhotoUrl = result.relativePath;
+      } catch (uploadError) {
+        return res.status(400).json({ success: false, message: uploadError.message });
+      }
 
-      updateData.profilePhoto = `/uploads/${filename}`;
+      updateData.profilePhoto = profilePhotoUrl;
     }
 
     // Step 3: Update user in database

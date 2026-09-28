@@ -185,13 +185,19 @@ export default function Login() {
       return;
     }
 
+    if (!otp) {
+      toast.error("OTP is required. Please verify OTP first.");
+      return;
+    }
+
     try {
-      const data = await authApi.resetPassword({ email: resetEmail, newPassword, role: selectedRole });
+      const data = await authApi.resetPassword({ email: resetEmail, otp, newPassword, role: selectedRole });
 
       if ((data as { success?: boolean }).success) {
         toast.success("Password reset successfully!");
         setForgotPasswordMode(false);
         setResetSent(false);
+        setOtp("");
       }
     } catch (err) {
       console.error("Password reset error:", err);
