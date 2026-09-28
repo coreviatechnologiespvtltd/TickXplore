@@ -1,11 +1,10 @@
 const mongoose = require("mongoose");
-const fs = require("fs");
-const path = require("path");
 const Bus = require("../models/Bus");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { sendEmail } = require("../utils/sendEmail");
 const { parseTakeoffInput, formatTakeoffDate, formatTakeoffTime } = require("../utils/datetime");
+const { safeUpload, safeDelete } = require("../utils/safeUpload");
 
 /**
  * A `datetime-local` form can never emit a `Z`, so a zoned value here always
@@ -35,24 +34,6 @@ const validateRequiredFields = (fields, res) => {
     });
   }
   return null;
-};
-
-// Helper function to handle file upload
-const handleFileUpload = (file, res) => {
-  if (!file) return null;
-
-  const imagePath = `/uploads/${file.name}`;
-  file.mv(`.${imagePath}`, (err) => {
-    if (err) {
-      console.error("File Upload Error:", err);
-      return res.status(500).json({
-        success: false,
-        message: "File upload failed",
-        error: err,
-      });
-    }
-  });
-  return imagePath;
 };
 
 //Create Bus 
@@ -125,8 +106,15 @@ exports.createBus = async (req, res) => {
     console.log("Final bookedSeats:", bookedSeats);
 
     // Handle Image Upload
-    const imagePath = handleFileUpload(req.files?.image, res);
-    if (imagePath === null) return; // Stop execution if file upload fails
+    let imagePath;
+    if (req.files?.image) {
+      try {
+        const result = await safeUpload(req.files.image);
+        imagePath = result.relativePath;
+      } catch (uploadError) {
+        return res.status(400).json({ success: false, message: uploadError.message });
+      }
+    }
 
     // Create and save the new bus
     const newBus = new Bus({
@@ -307,9 +295,16 @@ exports.updateBus = async (req, res) => {
 
     // Handle Image Update (if any)
     if (req.files?.image) {
-      const imagePath = handleFileUpload(req.files.image, res);
-      if (imagePath === null) return; // Stop execution if upload failed
-      bus.image = imagePath;
+      if (bus.image) {
+        await safeDelete(bus.image);
+      }
+
+      try {
+        const result = await safeUpload(req.files.image);
+        bus.image = result.relativePath;
+      } catch (uploadError) {
+        return res.status(400).json({ success: false, message: uploadError.message });
+      }
     }
 
     // Re-normalise the take-off time so an edited value is still read as
@@ -355,10 +350,7 @@ exports.deleteBus = async (req, res) => {
 
     // Delete Image File if Exists
     if (bus.image) {
-      const filePath = path.join(__dirname, "..", bus.image);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      await safeDelete(bus.image);
     }
 
     await bus.deleteOne();

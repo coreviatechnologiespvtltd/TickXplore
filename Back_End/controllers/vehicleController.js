@@ -1,11 +1,10 @@
 const mongoose = require("mongoose");
 const Vehicle = require("../models/Vehicle");
 const Reservation = require("../models/Reservation");
-const path = require("path");
-const fs = require("fs");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { sendEmail } = require("../utils/sendEmail");
+const { safeUpload, safeDelete } = require("../utils/safeUpload");
 
 //Validate Required Fields
 const validateRequiredFields = (fields, res) => {
@@ -38,16 +37,13 @@ exports.createVehicle = async (req, res) => {
       return res.status(400).json({ success: false, message: "Image is required." });
     }
 
-    const file = req.files.image;
-    const fileName = file.name;
-    const uploadPath = path.join("uploads", fileName);
-    const absolutePath = path.join(__dirname, "..", uploadPath);
-
-    if (!fs.existsSync(absolutePath)) {
-      await file.mv(absolutePath);
+    let imageUrl;
+    try {
+      const result = await safeUpload(req.files.image);
+      imageUrl = result.relativePath;
+    } catch (uploadError) {
+      return res.status(400).json({ success: false, message: uploadError.message });
     }
-
-    const imageUrl = `/uploads/${fileName}`;
 
     // Create the new vehicle object
     const newVehicle = new Vehicle({
@@ -166,14 +162,20 @@ exports.updateVehicle = async (req, res) => {
 
     if (req.files?.image) {
       const file = req.files.image;
-      const fileName = `${vendorId || vehicle.vendorId}_${file.name}`;
-      const uploadPath = path.join("uploads", fileName);
-      const absolutePath = path.join(__dirname, "..", uploadPath);
 
-      if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+      if (vehicle.image) {
+        await safeDelete(vehicle.image);
+      }
 
-      await file.mv(absolutePath);
-      vehicle.image = `/uploads/${fileName}`;
+      let imageUrl;
+      try {
+        const result = await safeUpload(file);
+        imageUrl = result.relativePath;
+      } catch (uploadError) {
+        return res.status(400).json({ success: false, message: uploadError.message });
+      }
+
+      vehicle.image = imageUrl;
     }
 
     if (vendorId) vehicle.vendorId = objectIdVendorId;
@@ -197,8 +199,7 @@ exports.deleteVehicle = async (req, res) => {
     if (!vehicle) return res.status(404).json({ success: false, message: "Vehicle not found." });
 
     if (vehicle.image) {
-      const filePath = path.join(__dirname, "..", vehicle.image.replace(/^\//, ""));
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      await safeDelete(vehicle.image);
     }
 
     await vehicle.deleteOne();

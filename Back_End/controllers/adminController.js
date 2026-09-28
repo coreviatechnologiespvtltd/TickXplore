@@ -1,12 +1,11 @@
 const bcrypt = require("bcryptjs");
-const path = require("path");
-const fs = require("fs");
 const Admin = require("../models/Admin");
 const User = require("../models/User");
 const Vendor = require("../models/Vendor");
 const generateToken = require("../utils/generateToken");
 const { sendEmail } = require("../utils/sendEmail"); 
 const Booking = require("../models/Booking");
+const { safeUpload, safeDelete } = require("../utils/safeUpload");
 
 // Forgot Password for Admin
 exports.forgotPassword = async (req, res) => {
@@ -121,30 +120,19 @@ exports.updateAdmin = async (req, res) => {
     if (req.files && req.files.profilePhoto) {
       const photo = req.files.profilePhoto;
 
-      // Delete old photo from uploads
       if (existingAdmin.profilePhoto) {
-        const oldPath = path.join(
-          __dirname,
-          "../uploads",
-          path.basename(existingAdmin.profilePhoto)
-        );
-
-        if (fs.existsSync(oldPath)) {
-          fs.unlinkSync(oldPath); // delete the file
-        }
+        await safeDelete(existingAdmin.profilePhoto);
       }
 
-      // Save new photo
-      const uploadPath = path.join(__dirname, "../uploads");
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath);
+      let profilePhotoUrl;
+      try {
+        const result = await safeUpload(photo);
+        profilePhotoUrl = result.relativePath;
+      } catch (uploadError) {
+        return res.status(400).json({ message: uploadError.message });
       }
 
-      const filename = `${photo.name}`;
-      const filepath = path.join(uploadPath, filename);
-      await photo.mv(filepath);
-
-      updateFields.profilePhoto = `/uploads/${filename}`;
+      updateFields.profilePhoto = profilePhotoUrl;
     }
 
     // 🔄 Update admin
