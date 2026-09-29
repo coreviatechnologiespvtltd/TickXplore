@@ -10,3 +10,6 @@ Back_End/config/serviceAccountKey.json
 node_modules/
 dist/
 logs/
+
+# RAG embedding cache. Regenerate with `cd Back_End && npm run chat:ingest`.
+Back_End/.cache/

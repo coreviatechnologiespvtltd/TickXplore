@@ -5,6 +5,8 @@
   "scripts": {
     "test": "npm run test:e2e",
     "test:e2e": "node tests/booking-flow.e2e.cjs",
+    "test:chat": "node tests/chat-rag.e2e.cjs",
+    "chat:ingest": "node utils/rag/ingest.js",
     "seed:backfill-booking-numbers": "node seed/backfillBookingNumbers.js",
     "start": "nodemon index.js"
   },

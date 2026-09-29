@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import Nav from "../Component/Nav";
 import Footer from "../Component/Footer";
 import ScrollToTopButton from "../Component/ScrollToTopButton";
+import ChatBot from "../Component/ChatBot";
 
 const ROLE_DASHBOARDS: Record<string, string> = {
   vendor: "/VendorDashboard",
@@ -29,6 +30,8 @@ const Main = () => {
       </main>
       <Footer />
       <ScrollToTopButton />
+      {/* The assistant is available on every page of the public site, not just Home. */}
+      <ChatBot />
     </div>
   );
 };

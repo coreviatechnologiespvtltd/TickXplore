@@ -1,6 +1,6 @@
 # TickXplore
 
-**TickXplore** is a transport booking platform (Final Year Project) that lets users book **bus tickets** and **vehicle reservations** across destinations in Nepal. It provides separate dashboards for **Users**, **Vendors**, and **Admins** to manage bookings, transport, and refunds.
+**TickXplore** is a transport booking platform that lets users book **bus tickets** and **vehicle reservations** across destinations in Nepal. It provides separate dashboards for **Users**, **Vendors**, and **Admins** to manage bookings, transport, and refunds.
 
 The project is split into two parts:
 

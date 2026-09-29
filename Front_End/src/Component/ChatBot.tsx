@@ -1,186 +1,268 @@
-import { useState, useEffect, useRef } from "react";
-import { FaPaperPlane, FaCommentDots, FaTimes } from "react-icons/fa";
+/**
+ * TickXplore chat window.
+ * ------------------------------------------------------------------
+ * This component used to call the Hugging Face API directly from the browser,
+ * which meant the API key had to be shipped to every visitor in a
+ * `VITE_HF_API_KEY`. That key is gone: all requests now go to our own
+ * `POST /api/chatbot`, and the Hugging Face token stays on the server.
+ *
+ * The backend also does things a browser cannot: it reads TickXplore's
+ * knowledge base (RAG), queries the real database for buses, vehicles,
+ * hotels and the signed-in user's own bookings, and requires an explicit
+ * confirmation before anything is changed.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FaCommentDots, FaPaperPlane, FaTimes } from "react-icons/fa";
 import { BeatLoader } from "react-spinners";
-import { api } from "../api";
+import { chatApi, type ChatResponse, type PendingAction } from "../api";
 
-interface ChatMessage {
-  from: "user" | "bot";
-  text: string;
+type Role = "user" | "assistant";
+
+interface Turn {
+  role: Role;
+  content: string;
 }
 
-interface TouristEntry {
-  location?: string;
-  info?: string;
-  [key: string]: unknown;
+interface Bubble extends Turn {
+  /** Knowledge documents the backend cited for this answer. */
+  sources?: string[];
 }
+
+const GREETING =
+  "Hi! I'm the TickXplore assistant. Ask me about bookings, buses and vehicles, " +
+  "stays, payments, refunds or how to sell on TickXplore. If you're signed in, " +
+  "I can also look up your own bookings and payment status.";
+
+const OPEN_LABEL = "Open the TickXplore assistant";
+const CLOSE_LABEL = "Close the TickXplore assistant";
+
+/** The message shown when the backend returns `success: false`. */
+const friendlyError = (error: unknown): string => {
+  const response = error as {
+    response?: { status?: number; data?: { message?: string } };
+  };
+  const fromServer = response?.response?.data?.message;
+  if (fromServer) return fromServer;
+
+  if (response?.response?.status === 429) {
+    return "You're sending messages a little too quickly. Please wait a moment and try again.";
+  }
+  if (response?.response?.status === 502 || response?.response?.status === 503) {
+    return "The assistant is temporarily unavailable. Please try again shortly.";
+  }
+  return "I couldn't reach the assistant. Please check your connection and try again.";
+};
 
 const ChatBot = () => {
-  const [userInput, setUserInput] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<Bubble[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [touristData, setTouristData] = useState<TouristEntry[]>([]);
+  const endRef = useRef<HTMLDivElement>(null);
 
-  const apiKey = import.meta.env.VITE_HF_API_KEY as string | undefined;
-  const MODEL_URL =
-    "https://api-inference.huggingface.co/models/TinyLlama/TinyLlama-1.1B-Chat-v1.0";
-
-  useEffect(() => {
-    fetch("/tourist-info.json")
-      .then((res) => res.json())
-      .then((data) => setTouristData(data))
-      .catch((err) => console.error("Failed to load tourist info:", err));
-  }, []);
-
-  const handleSend = async () => {
-    const trimmed = userInput.trim();
-    if (!trimmed || isLoading) return;
-
-    setMessages((prev) => [...prev, { from: "user", text: trimmed }]);
-    setIsLoading(true);
-    setUserInput("");
-
-    try {
-      const exactMatch = touristData.find(
-        (entry) =>
-          (entry.location || "").toLowerCase() === trimmed.toLowerCase()
-      );
-
-      if (exactMatch && exactMatch.info) {
-        setMessages((prev) => [
-          ...prev,
-          { from: "bot", text: exactMatch.info || "Sorry, I couldn't find that." },
-        ]);
-        setIsLoading(false);
-        return;
-      }
-
-      const partialMatches = touristData.filter((entry) =>
-        trimmed.toLowerCase().includes((entry.location || "").toLowerCase())
-      );
-
-      let prompt: string;
-      if (partialMatches.length > 0) {
-        const context = partialMatches
-          .map((e) => e.info)
-          .filter(Boolean)
-          .join("\n")
-          .slice(0, 500);
-        prompt = `<|user|>\nPlease answer the following question strictly based on the context.\nQuestion: ${trimmed}\nContext: ${context}\n<|assistant|>`;
-      } else {
-        prompt = `<|user|>\n${trimmed}\n<|assistant|>`;
-      }
-
-      if (!apiKey) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            from: "bot",
-            text: "The AI assistant is not configured server-side yet. Please ask about a tourist destination listed on our Tourist Areas page.",
-          },
-        ]);
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await api.post(MODEL_URL, { inputs: prompt }, {
-        headers: {
-          Authorization: apiKey,
-          "Content-Type": "application/json",
-        },
-      });
-
-      const generated =
-        (response.data as Array<{ generated_text?: string }>)?.[0]?.generated_text;
-      const reply = generated?.replace(prompt, "").trim() || "No response from TinyLlama.";
-      setMessages((prev) => [...prev, { from: "bot", text: reply }]);
-    } catch (error) {
-      const errorText =
-        (error as { response?: { data?: { error?: string } } }).response?.data?.error ||
-        "Failed to contact TinyLlama. Please try again.";
-      setMessages((prev) => [...prev, { from: "bot", text: errorText }]);
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleSend();
-  };
+  // The turns we send back to the backend, without the citation metadata.
+  const history = useCallback(
+    () => messages.map(({ role, content }) => ({ role, content })),
+    [messages]
+  );
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Suggestion chips are static, so they only need fetching once.
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      setMessages([
-        {
-          from: "bot",
-          text: "Hello! Welcome to TickXplore.\n\nYou can ask about:\n- Tourist places \n- Vehicle/bus availability\n- Booking and refunds",
-        },
-      ]);
+    let cancelled = false;
+    chatApi
+      .starters()
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.suggestions)) setSuggestions(data.suggestions);
+      })
+      .catch(() => {
+        /* The chat still works without chips; ignore the failure silently. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Send one message and fold the backend reply into the thread. */
+  const send = useCallback(
+    async (text: string, options: { confirm?: boolean; actionToken?: string } = {}) => {
+      const trimmed = text.trim();
+      if (!trimmed || isLoading) return;
+
+      // The user's own turn is shown immediately so the thread feels responsive.
+      setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+      setDraft("");
+      setIsLoading(true);
+      setPending(null);
+
+      try {
+        const data: ChatResponse = await chatApi.send({
+          message: trimmed,
+          conversation: history(),
+          ...options,
+        });
+
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.reply, sources: data.sources },
+        ]);
+        // A pending action replaces the chips: the user must decide, not ask something else.
+        setPending(data.pendingAction ?? null);
+        if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+        }
+      } catch (error) {
+        setMessages((prev) => [...prev, { role: "assistant", content: friendlyError(error) }]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [history, isLoading]
+  );
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void send(draft);
     }
-  }, [isOpen, messages.length]);
+  };
+
+  const toggle = () => {
+    setIsOpen((open) => {
+      // Seed the thread with a greeting the first time the window opens.
+      if (!open && messages.length === 0) {
+        setMessages([{ role: "assistant", content: GREETING }]);
+      }
+      return !open;
+    });
+  };
+
+  const confirmAction = () => {
+    if (!pending) return;
+    void send("Yes, please go ahead.", {
+      confirm: true,
+      actionToken: pending.token,
+    });
+  };
+
+  const declineAction = () => {
+    setPending(null);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "No problem — I haven't changed anything." },
+    ]);
+  };
 
   return (
     <>
       <button
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={toggle}
+        aria-label={isOpen ? CLOSE_LABEL : OPEN_LABEL}
+        aria-expanded={isOpen}
+        title={isOpen ? CLOSE_LABEL : OPEN_LABEL}
         className="fixed bottom-4 left-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-card-lg transition-colors hover:bg-blue-700"
-        aria-label={isOpen ? "Close chat" : "Open chat"}
-        
       >
         {isOpen ? <FaTimes size={20} /> : <FaCommentDots size={22} />}
       </button>
 
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 flex max-h-[calc(100vh-7rem)] w-[350px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-card-lg">
-          <div className="bg-slate-900 border-b border-white/10 px-4 py-4 text-center">
-            <h3 className="text-lg font-semibold text-white">TickXplore ChatBot</h3>
-            <p className="text-xs text-slate-400">Ask about tourist places & booking</p>
+        <div
+          role="dialog"
+          aria-label="TickXplore assistant"
+          className="fixed bottom-20 left-4 z-50 flex max-h-[calc(100vh-7rem)] w-[350px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-card-lg"
+        >
+          <div className="border-b border-white/10 bg-slate-900 px-4 py-4 text-center">
+            <h3 className="text-lg font-semibold text-white">TickXplore Assistant</h3>
+            <p className="text-xs text-slate-400">Booking, stays, payments and refunds</p>
           </div>
 
-          <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`max-w-[80%] whitespace-pre-wrap rounded-xl px-4 py-2 text-sm ${
-                  msg.from === "user"
-                    ? "ml-auto self-end bg-blue-600 text-white"
-                    : "mr-auto self-start bg-slate-100 text-slate-800"
-                }`}
-              >
-                {msg.text}
+          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+            {messages.map((message, index) => (
+              <div key={index} className="space-y-1">
+                <div
+                  className={`max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-4 py-2 text-sm ${
+                    message.role === "user"
+                      ? "ml-auto bg-blue-600 text-white"
+                      : "mr-auto bg-slate-100 text-slate-800"
+                  }`}
+                >
+                  {message.content}
+                </div>
+                {message.sources && message.sources.length > 0 && (
+                  <p className="px-1 text-[11px] text-slate-400">
+                    From: {message.sources.join(", ")}
+                  </p>
+                )}
               </div>
             ))}
+
             {isLoading && (
               <div className="flex justify-center py-2">
                 <BeatLoader size={6} color="#2563eb" />
               </div>
             )}
-            <div ref={messagesEndRef} />
+
+            <div ref={endRef} />
           </div>
+
+          {pending && (
+            <div className="border-t border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="mb-2 text-xs text-amber-900">This needs your confirmation.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmAction}
+                  disabled={isLoading}
+                  className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {pending.label}
+                </button>
+                <button
+                  onClick={declineAction}
+                  disabled={isLoading}
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50"
+                >
+                  No, thanks
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!pending && suggestions.length > 0 && !isLoading && (
+            <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-3 py-2">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => void send(suggestion)}
+                  className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 border-t border-slate-100 bg-white px-3 py-2">
             <input
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleKeyDown}
               type="text"
-              placeholder="Type your message..."
+              placeholder="Ask about bookings, buses, stays..."
+              aria-label="Type your message"
               className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
             />
             <button
-              onClick={handleSend}
-              disabled={isLoading || !userInput.trim()}
-              className={`rounded-full p-2.5 text-white transition-colors ${
-                isLoading || !userInput.trim()
-                  ? "bg-slate-300"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
+              onClick={() => void send(draft)}
+              disabled={isLoading || !draft.trim()}
               aria-label="Send message"
+              className={`rounded-full p-2.5 text-white transition-colors ${
+                isLoading || !draft.trim() ? "bg-slate-300" : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
               <FaPaperPlane size={15} />
             </button>
