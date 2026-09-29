@@ -7,7 +7,6 @@ import WhyChoose from "../../Component/WhyChoose";
 import PopularRoutes from "../../Component/PopularRoutes";
 import AvailableTransports from "../../Component/AvailableTransports";
 import HomeCTA from "../../Component/HomeCTA";
-import ChatBot from "../../Component/ChatBot";
 
 const Home = () => {
   return (
@@ -21,7 +20,6 @@ const Home = () => {
       <PopularRoutes />
       <TouristVisit />
       <HomeCTA />
-      <ChatBot />
     </div>
   );
 };

@@ -317,6 +317,47 @@ export const adminApi = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Chatbot                                                             */
+/* ------------------------------------------------------------------ */
+
+/** A confirmation the user must accept before the chatbot changes any data. */
+export interface PendingAction {
+  /** Which backend action this would run. */
+  tool: string;
+  /** Button text, e.g. "Yes, cancel this booking". */
+  label: string;
+  /** Opaque signed token. The user cannot read or forge it. */
+  token: string;
+  /** ISO timestamp after which the token stops working. */
+  expiresAt: string;
+}
+
+export interface ChatResponse {
+  success: boolean;
+  reply: string;
+  /** Knowledge documents that backed the answer, shown as small citations. */
+  sources: string[];
+  /** The tool that ran, if any. Useful for debugging; safe to display. */
+  tool: string | null;
+  /** Follow-up suggestions, when the backend offers any. */
+  suggestions: string[];
+  /** Present only when the assistant is asking to change something. */
+  pendingAction: PendingAction | null;
+}
+
+export const chatApi = {
+  send: (data: {
+    message: string;
+    conversation: Array<{ role: "user" | "assistant"; content: string }>;
+    confirm?: boolean;
+    actionToken?: string;
+  }): Promise<ChatResponse> => api.post("/api/chatbot", data).then((r) => r.data),
+
+  starters: (): Promise<{ success: boolean; suggestions: string[] }> =>
+    api.get("/api/chatbot/starters").then((r) => r.data),
+};
+
+/* ------------------------------------------------------------------ */
 /* Vendor                                                              */
 /* ------------------------------------------------------------------ */
 export const vendorApi = {
