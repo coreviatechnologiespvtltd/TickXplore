@@ -382,7 +382,13 @@ export interface PendingAction {
 export interface ChatResponse {
   success: boolean;
   reply: string;
-  /** Knowledge documents that backed the answer, shown as small citations. */
+  /**
+   * Knowledge documents that backed the answer, as raw filenames
+   * (`booking.md`, `payment.md`).
+   *
+   * Declared because the backend still returns it, so the type matches the wire
+   * format. The chat window deliberately ignores it — see `chat/ChatMessage.tsx`.
+   */
   sources: string[];
   /** The tool that ran, if any. Useful for debugging; safe to display. */
   tool: string | null;

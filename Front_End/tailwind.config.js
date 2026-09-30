@@ -43,10 +43,34 @@ export default {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        /* Chat window opening: rises and settles, like a real panel. */
+        "chat-panel-in": {
+          "0%": { opacity: "0", transform: "translateY(14px) scale(0.97)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        /* Individual bubbles arriving, staggered by the inline animation-delay. */
+        "chat-bubble-in": {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        /* The three-dot "typing" indicator. */
+        "chat-typing-dot": {
+          "0%, 60%, 100%": { opacity: "0.25", transform: "translateY(0)" },
+          "30%": { opacity: "1", transform: "translateY(-3px)" },
+        },
+        /* The launcher's one-time attention ping. Plays once, then the class drops. */
+        "chat-ping": {
+          "0%": { transform: "scale(1)", opacity: "0.55" },
+          "70%, 100%": { transform: "scale(1.9)", opacity: "0" },
+        },
       },
       animation: {
         "fade-in-up": "fade-in-up 0.5s ease-out both",
         "fade-in": "fade-in 0.4s ease-out both",
+        "chat-panel-in": "chat-panel-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "chat-bubble-in": "chat-bubble-in 0.18s ease-out both",
+        "chat-typing-dot": "chat-typing-dot 1.1s ease-in-out infinite",
+        "chat-ping": "chat-ping 1.6s cubic-bezier(0, 0, 0.2, 1) 2 both",
       },
     },
   },
