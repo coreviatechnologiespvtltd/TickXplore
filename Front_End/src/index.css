@@ -82,6 +82,32 @@
   .glass-panel {
     @apply bg-white/80 backdrop-blur-xl border border-white/40 shadow-card-lg;
   }
+
+  /* Conversation area of the chat window. `overscroll-contain` stops a flick
+     inside the thread from scrolling the page behind it, which is what makes the
+     window feel like its own surface on touch devices. */
+  .chat-scroll {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  /* A slimmer scrollbar than the site default, so it does not eat a 350px panel. */
+  .chat-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .chat-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .chat-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+    border: none;
+  }
+  .chat-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
 }
 
 /* Dual-range slider used by the accommodation price filter */
@@ -117,6 +143,21 @@
   background: #ffffff;
   border: 3px solid #2563eb;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+}
+
+/* Chat window height cap.
+   `--chat-vh` starts at the viewport height and is kept up to date from
+   `window.visualViewport` by ChatBot, so the window shrinks with the on-screen
+   keyboard instead of hiding behind it. `dvh` covers the browser URL bar on
+   browsers without visualViewport. */
+.chat-vh-cap {
+  --chat-vh: 100vh;
+  max-height: calc(var(--chat-vh) - 6.5rem);
+}
+@supports (height: 100dvh) {
+  .chat-vh-cap {
+    --chat-vh: 100dvh;
+  }
 }
 
 /* Thin styled scrollbar */
